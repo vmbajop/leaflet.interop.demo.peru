@@ -11,11 +11,14 @@
 </head>
 <body>
   <div id="map"></div>
-  <script src="libs/leaflet/leaflet.js"></script>
+<script src="libs/leaflet/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   <script>
     var map = L.map('map').setView([43.4917, -6.1106], 13); // Coordenadas de Pravia, Asturias
     
     cargarCapas();
+
+    var layerControl = L.control.layers({}, {}).addTo(map);
 
     var divCoordenadas = crearDivCoordenadas();
     document.body.appendChild(divCoordenadas);
@@ -28,6 +31,10 @@
     };
     document.getElementById('btn-capa').onclick = function() {
         cargarCapaLocal();
+    };
+
+    document.getElementById('btn-tool').onclick = function() {
+        intersect();
     };
 
     map.on('click', function(click) {
@@ -56,7 +63,7 @@
         fetch(wfsURL)
             .then(response => response.json())
             .then(data => {
-                L.geoJSON(data, {
+                const capa = L.geoJSON(data, {
                     style: {
                         color: '#333333',           // Borde gris oscuro
                         weight: 1,
@@ -65,6 +72,8 @@
                         fillOpacity: 0.5            // 50% de transparencia en el interior
                     }
                 }).addTo(map);
+                capa.options.name = 'Usos agrarios';
+                layerControl.addOverlay(capa, 'Usos agrarios');
                 ocultarSpinner();
             })
             .catch(err => console.error('Error cargando WFS:', err)
@@ -75,7 +84,7 @@
         fetch('capaLocal.geoJSON')
             .then(response => response.json())
             .then(data => {
-                L.geoJSON(data, {
+                const capa = L.geoJSON(data, {
                     style: {
                         color: '#1976D2',
                         weight: 2,
@@ -84,6 +93,8 @@
                         fillOpacity: 0.4
                     }
                 }).addTo(map);
+                capa.options.name = 'Capa Local';
+                layerControl.addOverlay(capa, 'Capa Local');
             })
             .catch(err => console.error('Error cargando capa local:', err)
         );    
@@ -331,6 +342,179 @@
             .setContent(popupContent)
             .openOn(map);
         }
+    }
+  
+    function intersect() {
+        // Obtener todas las capas GeoJSON cargadas en el mapa
+        const geojsonLayers = [];
+        map.eachLayer(function(layer) {
+            if (layer instanceof L.GeoJSON && layer.getLayers().length > 0) {
+                geojsonLayers.push(layer);
+            }
+        });
+
+        if (geojsonLayers.length < 2) {
+            alert('Debe haber al menos dos capas GeoJSON cargadas.');
+            return;
+        }
+
+        // Crear overlay de diálogo
+        const overlay = document.createElement('div');
+        overlay.style.position = 'fixed';
+        overlay.style.top = 0;
+        overlay.style.left = 0;
+        overlay.style.width = '100vw';
+        overlay.style.height = '100vh';
+        overlay.style.background = 'rgba(0,0,0,0.2)';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.zIndex = 2100;
+
+        // Crear diálogo
+        const dialog = document.createElement('div');
+        dialog.style.background = '#fff';
+        dialog.style.padding = '24px 20px 16px 20px';
+        dialog.style.borderRadius = '8px';
+        dialog.style.boxShadow = '0 2px 12px rgba(0,0,0,0.18)';
+        dialog.style.minWidth = '340px';
+        dialog.style.display = 'flex';
+        dialog.style.flexDirection = 'column';
+        dialog.style.gap = '14px';
+
+        // Label y select para capa de entrada
+        const labelEntrada = document.createElement('label');
+        labelEntrada.innerText = 'Capa de entrada:';
+        const selectEntrada = document.createElement('select');
+        selectEntrada.style.padding = '6px 8px';
+        selectEntrada.style.fontSize = '15px';
+        selectEntrada.style.borderRadius = '4px';
+        selectEntrada.style.marginBottom = '8px';
+
+        // Label y select para capa identificadora
+        const labelIdent = document.createElement('label');
+        labelIdent.innerText = 'Capa identificadora:';
+        const selectIdent = document.createElement('select');
+        selectIdent.style.padding = '6px 8px';
+        selectIdent.style.fontSize = '15px';
+        selectIdent.style.borderRadius = '4px';
+
+        // Nombres de capas (si no hay nombre, asignar uno genérico)
+        geojsonLayers.forEach((layer, idx) => {
+            let name = layer.options && layer.options.name ? layer.options.name : `Capa ${idx+1}`;
+            const opt1 = document.createElement('option');
+            opt1.value = idx;
+            opt1.text = name;
+            selectEntrada.appendChild(opt1);
+        });
+
+        // Función para actualizar el select de identificadora
+        function actualizarIdentOptions() {
+            selectIdent.innerHTML = '';
+            geojsonLayers.forEach((layer, idx) => {
+                if (idx != selectEntrada.value) {
+                    let name = layer.options && layer.options.name ? layer.options.name : `Capa ${idx+1}`;
+                    const opt2 = document.createElement('option');
+                    opt2.value = idx;
+                    opt2.text = name;
+                    selectIdent.appendChild(opt2);
+                }
+            });
+        }
+        selectEntrada.onchange = actualizarIdentOptions;
+        actualizarIdentOptions();
+
+        // Botones
+        const btns = document.createElement('div');
+        btns.style.display = 'flex';
+        btns.style.justifyContent = 'flex-end';
+        btns.style.gap = '12px';
+
+        const btnCancelar = document.createElement('button');
+        btnCancelar.innerText = 'Cancelar';
+        btnCancelar.style.padding = '6px 16px';
+        btnCancelar.style.border = 'none';
+        btnCancelar.style.borderRadius = '4px';
+        btnCancelar.style.background = '#eee';
+        btnCancelar.style.cursor = 'pointer';
+
+        const btnAceptar = document.createElement('button');
+        btnAceptar.innerText = 'Ejecutar';
+        btnAceptar.style.padding = '6px 16px';
+        btnAceptar.style.border = 'none';
+        btnAceptar.style.borderRadius = '4px';
+        btnAceptar.style.background = '#1976D2';
+        btnAceptar.style.color = '#fff';
+        btnAceptar.style.cursor = 'pointer';
+
+        btnCancelar.onclick = function() {
+            document.body.removeChild(overlay);
+        };
+
+        btnAceptar.onclick = function() {
+            const idxEntrada = parseInt(selectEntrada.value);
+            const idxIdent = parseInt(selectIdent.value);
+            if (isNaN(idxEntrada) || isNaN(idxIdent) || idxEntrada === idxIdent) {
+                alert('Seleccione capas válidas.');
+                return;
+            }
+            const capaEntrada = geojsonLayers[idxEntrada].toGeoJSON();
+            const capaIdent = geojsonLayers[idxIdent].toGeoJSON();
+
+            // Realizar identity usando turf.js
+            // Para cada feature de entrada, intersectar con cada feature de identificadora
+            const resultadoFeatures = [];
+            capaEntrada.features.forEach(f1 => {
+                let intersected = false;
+                capaIdent.features.forEach(f2 => {
+                    const inter = turf.intersect(f1, f2);
+                    if (inter) {
+                        intersected = true;
+                        // Combinar propiedades
+                        inter.properties = Object.assign({}, f1.properties, f2.properties);
+                        resultadoFeatures.push(inter);
+                    }
+                });
+                // Si no intersecta con ninguna, añadir el feature original
+                if (!intersected) {
+                    resultadoFeatures.push(f1);
+                }
+            });
+
+            const resultadoGeoJSON = {
+                type: "FeatureCollection",
+                features: resultadoFeatures
+            };
+
+            // Añadir la nueva capa al mapa
+            const nuevaCapa = L.geoJSON(resultadoGeoJSON, {
+                style: {
+                    color: '#e53935',         // Borde rojo
+                    weight: 2,
+                    opacity: 1,
+                    fillColor: '#8e24aa',     // Morado
+                    fillOpacity: 0.5          // 50% transparencia
+                }
+            }).addTo(map);
+            nuevaCapa.options.name = 'Resultado Identity';
+            layerControl.addOverlay(nuevaCapa, 'Resultado Identity');
+
+            document.body.removeChild(overlay);
+            alert('Capa resultado añadida al mapa.');
+        };
+
+        btns.appendChild(btnCancelar);
+        btns.appendChild(btnAceptar);
+
+        dialog.appendChild(labelEntrada);
+        dialog.appendChild(selectEntrada);
+        dialog.appendChild(labelIdent);
+        dialog.appendChild(selectIdent);
+        dialog.appendChild(btns);
+
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+        selectEntrada.focus();
     }
   </script>
 </body>
