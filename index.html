@@ -30,6 +30,10 @@
         cargarCapaLocal();
     };
 
+    map.on('click', function(click) {
+      identificar(click);
+    });
+
     map.on('mousemove', function(e) {
       divCoordenadas.innerText = `Lat: ${e.latlng.lat.toFixed(5)}, Lng: ${e.latlng.lng.toFixed(5)}`;
     });
@@ -48,6 +52,7 @@
         //fetch('https://sig.asturias.es/servicios/services/ClasesAgroecologicas50000/MapServer/WFSServer?service=WFS&version=2.0.0&request=GetFeature&typeName=usos_agrarios&outputFormat=GEOJSON')
         //url a pasar: https://sig.asturias.es/servicios/services/ClasesAgroecologicas50000/MapServer/WFSServer
         wfsURL += "?service=WFS&request=GetFeature&typeName=usos_agrarios&outputFormat=GEOJSON";
+        mostrarSpinner();
         fetch(wfsURL)
             .then(response => response.json())
             .then(data => {
@@ -60,6 +65,7 @@
                         fillOpacity: 0.5            // 50% de transparencia en el interior
                     }
                 }).addTo(map);
+                ocultarSpinner();
             })
             .catch(err => console.error('Error cargando WFS:', err)
         );
@@ -113,8 +119,10 @@
         barra.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
         barra.style.zIndex = 1001;       
 
-        barra.appendChild(crearBoton('Botón capa'));
-        barra.appendChild(crearBoton('Botón wfs'));
+        barra.appendChild(crearBoton('capa'));
+        barra.appendChild(crearBoton('wfs'));
+        barra.appendChild(crearBoton('tool'));
+        barra.appendChild(crearBoton('rest'));
 
         //document.body.appendChild(barra);
         return barra;
@@ -122,9 +130,28 @@
 
     function crearBoton(texto) {
         var btn = document.createElement('button');
-        // Asigna un id único a cada botón para facilitar su captura posterior
-        btn.id = texto === 'Botón wfs' ? 'btn-wfs' : 'btn-capa';
-        btn.innerText = texto === 'Botón wfs' ? 'WFS' : 'CAPA';
+        // Asigna un id único a cada botón según el texto recibido
+        switch (texto.toLowerCase()) {
+            case 'wfs':
+            btn.id = 'btn-wfs';
+            btn.innerText = 'WFS';
+            break;
+            case 'capa':
+            btn.id = 'btn-capa';
+            btn.innerText = 'CAPA';
+            break;
+            case 'rest':
+            btn.id = 'btn-rest';
+            btn.innerText = 'REST';
+            break;
+            case 'tool':
+            btn.id = 'btn-tool';
+            btn.innerText = 'TOOL';
+            break;
+            default:
+            btn.id = 'btn-otro';
+            btn.innerText = texto;
+        }
         btn.style.width = '64px';
         btn.style.height = '64px';
         btn.style.fontSize = '20px';
@@ -225,6 +252,85 @@
         document.body.appendChild(overlay);
 
         input.focus();
+    };
+
+    function mostrarSpinner() {
+        let spinner = document.getElementById('spinner-cargando');
+        if (!spinner) {
+            spinner = document.createElement('div');
+            spinner.id = 'spinner-cargando';
+            spinner.style.position = 'fixed';
+            spinner.style.top = '0';
+            spinner.style.left = '0';
+            spinner.style.width = '100vw';
+            spinner.style.height = '100vh';
+            spinner.style.background = 'rgba(255,255,255,0.1)';
+            spinner.style.display = 'flex';
+            spinner.style.alignItems = 'center';
+            spinner.style.justifyContent = 'center';
+            spinner.style.zIndex = 3000;
+
+            let spin = document.createElement('div');
+            spin.style.width = '32px';
+            spin.style.height = '32px';
+            spin.style.border = '4px solid #eee';
+            spin.style.borderTop = '4px solid #1976D2';
+            spin.style.borderRadius = '50%';
+            spin.style.animation = 'spin 1s linear infinite';
+            spinner.appendChild(spin);
+
+            // Agrega la animación CSS
+            let style = document.createElement('style');
+            style.innerHTML = `
+            @keyframes spin {
+                0% { transform: rotate(0deg);}
+                100% { transform: rotate(360deg);}
+            }`;
+            document.head.appendChild(style);
+
+            document.body.appendChild(spinner);
+        } else {
+            spinner.style.display = 'flex';
+        }
+    };
+
+    function ocultarSpinner() {
+
+        let spinner = document.getElementById('spinner-cargando');
+        if (spinner) spinner.style.display = 'none';
+    }
+
+    function identificar(e){        
+        let encontrados = [];
+        map.eachLayer(function(layer) {
+            if (layer instanceof L.GeoJSON) {
+            layer.eachLayer(function(fLayer) {
+                // Para polígonos y líneas
+                if (fLayer.feature && fLayer.getBounds && fLayer.getBounds().contains(e.latlng)) {
+                encontrados.push(fLayer);
+                }
+                // Para puntos (marcadores)
+                else if (fLayer.feature && fLayer.getLatLng && fLayer.getLatLng().distanceTo(e.latlng) < 10) {
+                encontrados.push(fLayer);
+                }
+            });
+            }
+        });
+
+        if (encontrados.length > 0) {
+            let contenido = encontrados.map((f, i) =>
+            `<b>Entidad ${i + 1}</b><br>` +
+            Object.entries(f.feature.properties || {})
+                .map(([k, v]) => `<b>${k}:</b> ${v}`)
+                .join('<br>')
+            ).join('<hr style="margin:6px 0;">');
+            // Envuelve el contenido en un div con scroll lateral y altura máxima
+            let popupContent = `<div style="max-height:220px; max-width:340px; overflow:auto;">${contenido}</div>`;
+            L.popup()
+            .setLatLng(e.latlng)
+            .setContent(popupContent)
+            .openOn(map);
+        }
     }
   </script>
 </body>
