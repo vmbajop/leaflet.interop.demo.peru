@@ -1,271 +1,711 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mapa de pruebas de Leaflet</title>
-  <link rel="stylesheet" href="libs/leaflet/leaflet.css" />
-  <style>
-    #map { height: 100vh; }
-  </style>
+    <meta charset="utf-8" />
+    <title>Visor Leaflet Perú</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="/libs/leaflet/leaflet.css" />
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        #map { height: 100vh; width: 100vw; }
+        .coords-control {
+            background: white;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+        }
+        .popup-scroll {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .add-layer-control {
+            background: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+            font-size: 13px;
+        }
+        .add-layer-control input, .add-layer-control select, .add-layer-control button {
+            margin: 2px 0;
+            width: 100%;
+        }
+    </style>
 </head>
 <body>
-  <div id="map"></div>
-<script src="libs/leaflet/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-  <script>
-    var map = L.map('map').setView([43.4917, -6.1106], 13); // Coordenadas de Pravia, Asturias
-    
-    cargarCapas();
-
-    var layerControl = L.control.layers({}, {}).addTo(map);
-
-    var divCoordenadas = crearDivCoordenadas();
-    document.body.appendChild(divCoordenadas);
-
-    var botonera = crearBotonera();
-    document.body.appendChild(botonera);
-
-    document.getElementById('btn-wfs').onclick = function() {
-        crearDialogoCargaCapaWFS();
-    };
-    document.getElementById('btn-capa').onclick = function() {
-        cargarCapaLocal();
-    };
-
-    document.getElementById('btn-tool').onclick = function() {
-        intersect();
-    };
-
-    map.on('click', function(click) {
-      identificar(click);
-    });
-
-    map.on('mousemove', function(e) {
-      divCoordenadas.innerText = `Lat: ${e.latlng.lat.toFixed(5)}, Lng: ${e.latlng.lng.toFixed(5)}`;
-    });
-
-    map.on('mouseout', function() {
-      divCoordenadas.innerText = 'Lat: , Lon: ';
-    });
-
-    function cargarCapas(){
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);            
-    };
-
-    function cargarWFS(wfsURL) {
-        //fetch('https://sig.asturias.es/servicios/services/ClasesAgroecologicas50000/MapServer/WFSServer?service=WFS&version=2.0.0&request=GetFeature&typeName=usos_agrarios&outputFormat=GEOJSON')
-        //url a pasar: https://sig.asturias.es/servicios/services/ClasesAgroecologicas50000/MapServer/WFSServer
-        wfsURL += "?service=WFS&request=GetFeature&typeName=usos_agrarios&outputFormat=GEOJSON";
+    <div id="map"></div>
+    <!-- Leaflet JS -->
+    <script src="/libs/leaflet/leaflet.js"></script>
+    <!-- Proj4JS for projections -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
+    <!-- Proj4Leaflet -->
+    <script src="https://unpkg.com/proj4leaflet"></script>
+    <!-- turf.js -->
+     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <script>
+        /* Mapa y capa base */
+        var map = L.map('map').setView([-9.19, -75.0152], 6);
+        map.on('mousemove', updateCoords);
+        
         mostrarSpinner();
-        fetch(wfsURL)
-            .then(response => response.json())
-            .then(data => {
-                const capa = L.geoJSON(data, {
-                    style: {
-                        color: '#333333',           // Borde gris oscuro
-                        weight: 1,
-                        opacity: 1,                 // Sin transparencia en el borde
-                        fillColor: '#FFA94D',       // Naranja suave
-                        fillOpacity: 0.5            // 50% de transparencia en el interior
-                    }
-                }).addTo(map);
-                capa.options.name = 'Usos agrarios';
-                layerControl.addOverlay(capa, 'Usos agrarios');
-                ocultarSpinner();
-            })
-            .catch(err => console.error('Error cargando WFS:', err)
-        );
-    };
 
-    function cargarCapaLocal(){
-        fetch('capaLocal.geoJSON')
-            .then(response => response.json())
-            .then(data => {
-                const capa = L.geoJSON(data, {
-                    style: {
-                        color: '#1976D2',
-                        weight: 2,
-                        opacity: 1,
-                        fillColor: '#90CAF9',
-                        fillOpacity: 0.4
-                    }
-                }).addTo(map);
-                capa.options.name = 'Capa Local';
-                layerControl.addOverlay(capa, 'Capa Local');
-            })
-            .catch(err => console.error('Error cargando capa local:', err)
-        );    
-    }
+        var basemaps = addBasemaps();
+        basemaps["OpenStreetMap"].addTo(map);        
 
-    function crearDivCoordenadas() {        
-        var coordDiv = document.createElement('div');
-        coordDiv.style.position = 'absolute';
-        coordDiv.style.bottom = '10px';
-        coordDiv.style.left = '10%';
-        coordDiv.style.transform = 'translateX(-50%)';
-        coordDiv.style.background = 'rgba(255,255,255,0.8)';
-        coordDiv.style.padding = '4px 12px';
-        coordDiv.style.borderRadius = '4px';
-        coordDiv.style.fontFamily = 'monospace';
-        coordDiv.style.fontSize = '14px';
-        coordDiv.style.zIndex = 1000;
-        coordDiv.innerText = 'Lat: , Lng: ';
-        return coordDiv;
-    };
-    
-    function crearBotonera(){
-        var barra = document.createElement('div');
-        barra.style.position = 'absolute';
-        barra.style.bottom = '30px';
-        barra.style.left = '50%';
-        barra.style.transform = 'translateX(-50%)';
-        barra.style.background = 'rgba(255,255,255,0.6)';
-        barra.style.padding = '8px 24px';
-        barra.style.borderRadius = '8px';
-        barra.style.display = 'flex';
-        barra.style.gap = '16px';
-        barra.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-        barra.style.zIndex = 1001;       
+        /* LayerControl */
+        var overlays = {};
+        var layerControl = L.control.layers(basemaps, overlays, {collapsed: true}).addTo(map);
 
-        barra.appendChild(crearBoton('capa'));
-        barra.appendChild(crearBoton('wfs'));
-        barra.appendChild(crearBoton('tool'));
-        barra.appendChild(crearBoton('rest'));
+        /* Control de coordenadas */
+        var coordenadas = addCoordControl();
+        coordenadas.addTo(map);
+        
+        document.getElementById('coord-format').addEventListener('change', function() {
+            map.fire('mousemove', {latlng: map.getCenter()});
+        });
 
-        //document.body.appendChild(barra);
-        return barra;
-    };
+        ocultarSpinner();
 
-    function crearBoton(texto) {
-        var btn = document.createElement('button');
-        // Asigna un id único a cada botón según el texto recibido
-        switch (texto.toLowerCase()) {
-            case 'wfs':
-            btn.id = 'btn-wfs';
-            btn.innerText = 'WFS';
-            break;
-            case 'capa':
-            btn.id = 'btn-capa';
-            btn.innerText = 'CAPA';
-            break;
-            case 'rest':
-            btn.id = 'btn-rest';
-            btn.innerText = 'REST';
-            break;
-            case 'tool':
-            btn.id = 'btn-tool';
-            btn.innerText = 'TOOL';
-            break;
-            default:
-            btn.id = 'btn-otro';
-            btn.innerText = texto;
-        }
-        btn.style.width = '64px';
-        btn.style.height = '64px';
-        btn.style.fontSize = '20px';
-        btn.style.padding = '0';
-        btn.style.border = 'none';
-        btn.style.borderRadius = '8px';
-        btn.style.background = '#64b5f6'; // azul más suave
-        btn.style.color = '#fff';
-        btn.style.cursor = 'pointer';
-        btn.style.boxShadow = '0 1px 6px rgba(0,0,0,0.12)';
-        btn.onmouseover = function() { btn.style.background = '#42a5f5'; };
-        btn.onmouseout = function() { btn.style.background = '#64b5f6'; };
-        return btn;
-    };
+        /* Boton de control de carga de capas - Mejorar sacando elementos a otras funciones */
+        var AddLayerButton = L.Control.extend({
+            options: { position: 'topright' },
+            onAdd: function(map) {
+            var container = L.DomUtil.create('div', 'leaflet-bar add-layer-control-container');
+            container.style.marginTop = '60px';
 
-    function crearDialogoCargaCapaWFS(){
-        // Crear fondo semitransparente
-        var overlay = document.createElement('div');
-        overlay.style.position = 'fixed';
-        overlay.style.top = 0;
-        overlay.style.left = 0;
-        overlay.style.width = '100vw';
-        overlay.style.height = '100vh';
-        overlay.style.background = 'rgba(0,0,0,0.2)';
-        overlay.style.display = 'flex';
-        overlay.style.alignItems = 'center';
-        overlay.style.justifyContent = 'center';
-        overlay.style.zIndex = 2000;
+            var btn = L.DomUtil.create('button', 'add-layer-control', container);
+            btn.style.display = 'block';
+            btn.style.width = '40px';
+            btn.style.height = '40px';
+            btn.style.background = `white url('imagenes/layer_3419447.png') no-repeat center center`;
+            btn.style.backgroundSize = '24px 24px';
+            btn.title = 'Agregar capa';
+            btn.style.border = '1px solid #ccc';
+            btn.style.boxShadow = '0 1px 5px rgba(0,0,0,0.4)';
+            btn.style.borderRadius = '4px';
+            btn.style.cursor = 'pointer';
 
-        // Crear el diálogo
-        var dialog = document.createElement('div');
-        dialog.style.background = '#fff';
-        dialog.style.padding = '24px 20px 16px 20px';
-        dialog.style.borderRadius = '8px';
-        dialog.style.boxShadow = '0 2px 12px rgba(0,0,0,0.18)';
-        dialog.style.minWidth = '320px';
-        dialog.style.display = 'flex';
-        dialog.style.flexDirection = 'column';
-        dialog.style.gap = '12px';
+            L.DomEvent.disableClickPropagation(btn);
 
-        var label = document.createElement('label');
-        label.innerText = 'URL del servicio WFS:';
-        label.style.marginBottom = '4px';
+            btn.addEventListener('click', function() {
+                let modalBg = document.createElement('div');
+                modalBg.style.position = 'fixed';
+                modalBg.style.top = 0;
+                modalBg.style.left = 0;
+                modalBg.style.width = '100vw';
+                modalBg.style.height = '100vh';
+                modalBg.style.background = 'rgba(0,0,0,0.3)';
+                modalBg.style.zIndex = 9999;
 
-        var input = document.createElement('input');
-        input.type = 'text';
-        input.style.width = '100%';
-        input.style.padding = '6px 8px';
-        input.style.fontSize = '15px';
-        input.style.border = '1px solid #bbb';
-        input.style.borderRadius = '4px';
+                let dialog = document.createElement('div');
+                dialog.style.position = 'fixed';
+                dialog.style.top = '50%';
+                dialog.style.left = '50%';
+                dialog.style.transform = 'translate(-50%, -50%)';
+                dialog.style.background = 'white';
+                dialog.style.padding = '20px';
+                dialog.style.borderRadius = '8px';
+                dialog.style.boxShadow = '0 2px 12px rgba(0,0,0,0.3)';
+                dialog.style.minWidth = '320px';
+                dialog.innerHTML = `
+                <label>Tipo de capa:
+                <select id="tipo-capa">
+                    <option value="GeoJSON">GeoJSON</option>
+                    <option value="WMS">WMS</option>
+                    <option value="WFS">WFS</option>
+                </select>
+                </label>
+                <div id="geojson-file-div" style="margin:8px 0;">
+                    <input type="file" id="geojson-file" accept=".geojson,.json" style="width:100%;" />
+                </div>
+                <div id="url-div" style="margin:8px 0;">
+                    <input type="text" id="capa-url" placeholder="URL del servicio" style="width:100%;" />
+                </div>
+                <button id="confirmar-capa" style="margin-top:10px;width:100%;">Agregar capa</button>
+                <button id="cancelar-capa" style="margin-top:6px;width:100%;">Cancelar</button>
+                `;
 
-        var btns = document.createElement('div');
-        btns.style.display = 'flex';
-        btns.style.justifyContent = 'flex-end';
-        btns.style.gap = '12px';
+                function updateDialogFields() {
+                let tipo = dialog.querySelector('#tipo-capa').value;
+                dialog.querySelector('#geojson-file-div').style.display = (tipo === 'GeoJSON') ? 'block' : 'none';
+                dialog.querySelector('#url-div').style.display = (tipo === 'GeoJSON') ? 'none' : 'block';
+                }
+                dialog.querySelector('#tipo-capa').addEventListener('change', updateDialogFields);
+                updateDialogFields();
 
-        var btnCancelar = document.createElement('button');
-        btnCancelar.innerText = 'Cancelar';
-        btnCancelar.style.padding = '6px 16px';
-        btnCancelar.style.border = 'none';
-        btnCancelar.style.borderRadius = '4px';
-        btnCancelar.style.background = '#eee';
-        btnCancelar.style.cursor = 'pointer';
+                dialog.querySelector('#confirmar-capa').onclick = function() {
+                let tipo = dialog.querySelector('#tipo-capa').value;
+                if (tipo === 'GeoJSON') {
+                    agregarCapaGeoJSON(dialog.querySelector('#geojson-file'));
+                } else if (tipo === 'WMS') {
+                    let url = dialog.querySelector('#capa-url').value.trim();
+                    if (url) agregarCapaWMS(url);
+                } else if (tipo === 'WFS') {
+                    let url = dialog.querySelector('#capa-url').value.trim();
+                    if (url) agregarCapaWFS(url);
+                }
+                document.body.removeChild(modalBg);
+                };
 
-        var btnAceptar = document.createElement('button');
-        btnAceptar.innerText = 'Aceptar';
-        btnAceptar.style.padding = '6px 16px';
-        btnAceptar.style.border = 'none';
-        btnAceptar.style.borderRadius = '4px';
-        btnAceptar.style.background = '#1976D2';
-        btnAceptar.style.color = '#fff';
-        btnAceptar.style.cursor = 'pointer';
+                dialog.querySelector('#cancelar-capa').onclick = function() {
+                document.body.removeChild(modalBg);
+                };
 
-        btnCancelar.onclick = function() {
-            document.body.removeChild(overlay);
+                modalBg.appendChild(dialog);
+                document.body.appendChild(modalBg);
+            });
+
+            return container;
+            },
+            onRemove: function(map) {}
+        });
+
+        map.addControl(new AddLayerButton());
+
+        /* ---------------------------------------------------------------------------------------------- */
+        // Botón para ejecutar superposición de capas
+        /* ---------------------------------------------------------------------------------------------- */
+        
+        var IntersectButton = L.Control.extend({
+            options: { position: 'topright' },
+            onAdd: function(map) {
+                var container = L.DomUtil.create('div', 'leaflet-bar add-layer-control-container');
+                container.style.marginTop = '60px';
+
+                var btn = L.DomUtil.create('button', 'add-layer-control', container);
+                btn.style.display = 'block';
+                btn.style.width = '40px';
+                btn.style.height = '40px';
+                btn.style.background = `white url('imagenes/tools.png') no-repeat center center`;
+                btn.style.backgroundSize = '30px 30px';
+                btn.title = 'Intersecar capas';
+                btn.style.border = '1px solid #ccc';
+                btn.style.boxShadow = '0 1px 5px rgba(0,0,0,0.4)';
+                btn.style.borderRadius = '4px';
+                btn.style.cursor = 'pointer';
+
+                L.DomEvent.disableClickPropagation(btn);
+
+                btn.addEventListener('click', function() {
+                    let modalBg = document.createElement('div');
+                    modalBg.style.position = 'fixed';
+                    modalBg.style.top = 0;
+                    modalBg.style.left = 0;
+                    modalBg.style.width = '100vw';
+                    modalBg.style.height = '100vh';
+                    modalBg.style.background = 'rgba(0,0,0,0.3)';
+                    modalBg.style.zIndex = 9999;
+
+                    let dialog = document.createElement('div');
+                    dialog.style.position = 'fixed';
+                    dialog.style.top = '50%';
+                    dialog.style.left = '50%';
+                    dialog.style.transform = 'translate(-50%, -50%)';
+                    dialog.style.background = 'white';
+                    dialog.style.padding = '20px';
+                    dialog.style.borderRadius = '8px';
+                    dialog.style.boxShadow = '0 2px 12px rgba(0,0,0,0.3)';
+                    dialog.style.minWidth = '320px';
+
+                    let overlayKeys = Object.keys(overlays);
+                    let capaOptions = overlayKeys.map(k => `<option value="${k}">${k}</option>`).join('');
+                    dialog.innerHTML = `
+                        <label>Capa de entrada:
+                            <select id="capa-entrada">${capaOptions}</select>
+                        </label>
+                        <label style="margin-top:8px;display:block;">Capa de identificación:
+                            <select id="capa-identificacion">${capaOptions}</select>
+                        </label>
+                        <label style="margin-top:8px;display:block;">Opciones:
+                            <select id="intersect-opcion">
+                                <option value="solo_intersectan">Solo los que intersectan</option>
+                                <option value="todos">Todos (marcar intersección)</option>
+                            </select>
+                        </label>
+                        <button id="ejecutar-intersect" style="margin-top:10px;width:100%;">Ejecutar</button>
+                        <button id="cancelar-intersect" style="margin-top:6px;width:100%;">Cancelar</button>
+                    `;
+
+                    dialog.querySelector('#ejecutar-intersect').onclick = function() {
+                        let capaEntrada = dialog.querySelector('#capa-entrada').value;
+                        let capaIdent = dialog.querySelector('#capa-identificacion').value;
+                        let opcion = dialog.querySelector('#intersect-opcion').value;
+                        if (capaEntrada === capaIdent) {
+                            alert("Debe seleccionar dos capas diferentes.");
+                            return;
+                        }
+                        intersect(overlays[capaEntrada], overlays[capaIdent], opcion);
+                        document.body.removeChild(modalBg);
+                    };
+
+                    dialog.querySelector('#cancelar-intersect').onclick = function() {
+                        document.body.removeChild(modalBg);
+                    };
+
+                    modalBg.appendChild(dialog);
+                    document.body.appendChild(modalBg);
+                });
+
+                return container;
+            },
+            onRemove: function(map) {}
+        });
+
+        map.addControl(new IntersectButton());    
+
+        
+
+        
+
+        function updateLayerControl() {
+            // Remove all overlays from the control
+            for (var key in overlays) {
+                layerControl.removeLayer(overlays[key]);
+            }
+            // Add current overlays to the control
+            for (var key in overlays) {
+                layerControl.addOverlay(overlays[key], key);
+            }
         };
-
-        btnAceptar.onclick = function() {
-            var url = input.value.trim();
-            if (url) {
-            cargarWFS(url);
-            document.body.removeChild(overlay);
-            } else {
-            input.style.border = '1.5px solid #e53935';
-            input.focus();
+        
+        function updateCoords(e) {
+            let format = document.getElementById('coord-format').value;
+            let lat = e.latlng.lat, lng = e.latlng.lng;
+            let coordsDiv = document.getElementById('coords');
+            if (format === 'WGS84_DD') {
+                coordsDiv.textContent = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
+            } else if (format === 'WGS84_DDMMSS') {
+                let latDeg = Math.floor(Math.abs(lat));
+                let latMin = Math.floor((Math.abs(lat) - latDeg) * 60);
+                let latSec = ((Math.abs(lat) - latDeg - latMin / 60) * 3600).toFixed(2);
+                let lngDeg = Math.floor(Math.abs(lng));
+                let lngMin = Math.floor((Math.abs(lng) - lngDeg) * 60);
+                let lngSec = ((Math.abs(lng) - lngDeg - lngMin / 60) * 3600).toFixed(2);
+                coordsDiv.textContent = `Lat: ${latDeg}°${latMin}'${latSec}" ${lat < 0 ? 'S' : 'N'}, Lng: ${lngDeg}°${lngMin}'${lngSec}" ${lng < 0 ? 'W' : 'E'}`;
+            } else if (format === 'WebMercator') {
+                let merc = proj4('EPSG:4326', 'EPSG:3857', [lng, lat]);
+                coordsDiv.textContent = `X: ${merc[0].toFixed(2)}, Y: ${merc[1].toFixed(2)}`;
+            } else if (format === 'UTM') {
+                let utm = latLngToUTM(lat, lng);
+                coordsDiv.textContent = `Zona: ${utm.zone}S, Este: ${utm.e.toFixed(2)}, Norte: ${utm.n.toFixed(2)}`;
+            }
+            else if (format === 'WebMercator') {
+                let merc = proj4('EPSG:4326', 'EPSG:3857', [lng, lat]);
+                coordsDiv.textContent = `X: ${merc[0].toFixed(2)}, Y: ${merc[1].toFixed(2)}`;
+            } else if (format === 'UTM') {
+                let utm = latLngToUTM(lat, lng);
+                coordsDiv.textContent = `Zona: ${utm.zone}S, Este: ${utm.e.toFixed(2)}, Norte: ${utm.n.toFixed(2)}`;
             }
         };
 
-        btns.appendChild(btnCancelar);
-        btns.appendChild(btnAceptar);
+        
 
-        dialog.appendChild(label);
-        dialog.appendChild(input);
-        dialog.appendChild(btns);
+        // zonas UTM para Peru (17S, 18S, 19S), 18S Peru central
+        function latLngToUTM(lat, lng) {
+            var zone = Math.floor((lng + 180) / 6) + 1;
+            var projStr = `+proj=utm +zone=${zone} +south +datum=WGS84 +units=m +no_defs`;
+            var utm = proj4('EPSG:4326', projStr, [lng, lat]);
+            return {zone: zone, e: utm[0], n: utm[1]};
+        }
 
-        overlay.appendChild(dialog);
-        document.body.appendChild(overlay);
+        
 
-        input.focus();
-    };
+        /*  
+        * Evento de clic en el mapa para mostrar información de entidades
+        * Recorre todas las capas superpuestas y verifica si el punto clicado está dentro de sus límites.
+        * Si es así, muestra un popup con la información de las entidades.
+        * Para capas WMS, intenta obtener información usando GetFeatureInfo.
+        */
+        map.on('click', function(e) {
+            var results = [];
+            Object.values(overlays).forEach(function(layer) {
+                if (layer instanceof L.GeoJSON) {
+                    layer.eachLayer(function(l) {
+                        if (l.getBounds && l.getBounds().contains(e.latlng)) {
+                            results.push(l.feature);
+                        } else if (l.getLatLng && l.getLatLng().distanceTo(e.latlng) < 10) {
+                            results.push(l.feature);
+                        }
+                    });
+                }
+                // For WMS, try GetFeatureInfo
+                if (layer instanceof L.TileLayer.WMS) {
+                    var url = getFeatureInfoUrl(layer, e.latlng);
+                    if (url) {
+                        fetch(url)
+                            .then(r => r.text())
+                            .then(txt => {
+                                var html = `<div class="popup-scroll">${txt}</div>`;
+                                L.popup({maxWidth: 400})
+                                    .setLatLng(e.latlng)
+                                    .setContent(html)
+                                    .openOn(map);
+                            });
+                    }
+                }
+            });
+            if (results.length > 0) {
+                var html = '<div class="popup-scroll">';
+                results.forEach(function(f, i) {
+                    html += `<b>Entidad ${i+1}</b><table>`;
+                    for (var k in f.properties) {
+                        html += `<tr><td><strong>${k}</strong></td><td>${f.properties[k]}</td></tr>`;
+                    }
+                    html += '</table><hr>';
+                });
+                html += '</div>';
+                L.popup({maxWidth: 400})
+                    .setLatLng(e.latlng)
+                    .setContent(html)
+                    .openOn(map);
+            }
+        });
 
-    function mostrarSpinner() {
+        /* Función para manejar eventos en cada entidad del GeoJSON
+        * Asocia un evento de clic a cada entidad para mostrar un popup con sus propiedades.
+        * @param {Object} feature - La entidad GeoJSON.
+        * @param {L.Layer} layer - La capa Leaflet asociada a la entidad.
+        * @returns {void}
+        */
+        function onEachFeature(feature, layer) {
+            layer.on('click', function(e) {
+                var props = feature.properties;
+                var html = '<div class="popup-scroll"><table>';
+                for (var k in props) {
+                    html += `<tr><td><strong>${k}</strong></td><td>${props[k]}</td></tr>`;
+                }
+                html += '</table></div>';
+                layer.bindPopup(html).openPopup(e.latlng);
+            });
+        };
+
+        // Helper para GetFeatureInfo WMS
+        function getFeatureInfoUrl(layer, latlng) {
+            var point = map.latLngToContainerPoint(latlng, map.getZoom());
+            var size = map.getSize();
+            var params = {
+                request: 'GetFeatureInfo',
+                service: 'WMS',
+                srs: 'EPSG:4326',
+                styles: '',
+                transparent: true,
+                version: layer.wmsParams.version,
+                format: layer.wmsParams.format,
+                bbox: map.getBounds().toBBoxString(),
+                height: size.y,
+                width: size.x,
+                layers: layer.wmsParams.layers,
+                query_layers: layer.wmsParams.layers,
+                info_format: 'text/html'
+            };
+            if (params.version === '1.3.0') {
+                params.crs = 'EPSG:4326';
+                params.i = Math.round(point.x);
+                params.j = Math.round(point.y);
+            } else {
+                params.srs = 'EPSG:4326';
+                params.x = Math.round(point.x);
+                params.y = Math.round(point.y);
+            }
+            var url = layer._url + L.Util.getParamString(params, layer._url, true);
+            return url;
+        }
+
+        // Remove layer from overlays and update control when removed from map
+        map.on('layerremove', function(e) {
+            for (var key in overlays) {
+                if (overlays[key] === e.layer) {
+                    delete overlays[key];
+                    updateLayerControl();
+                    break;
+                }
+            }
+        });
+        map.on('layeradd', function(e) {
+            updateLayerControl();
+        });
+
+        function addBasemaps(){
+            let osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap contributors'
+            });
+
+            // Esri World Imagery (satellite)
+            let esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                attribution: 'Tiles © Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            });
+
+            // Esri World Imagery + OSM labels (mixta)
+            let esriLabels = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                attribution: 'Labels © Esri'
+            });
+            let esriHybrid = L.layerGroup([esriSat, esriLabels]);
+
+            // Base layers object
+            let baseLayers = {
+                "OpenStreetMap": osm,
+                "Satélite": esriSat,
+                "Mixta": esriHybrid
+            };
+
+            return baseLayers;
+        };
+
+        function addCoordControl(){
+            let coordFormat = 'WGS84'; // Default
+            let coordControl = L.control({position: 'bottomleft'});
+            coordControl.onAdd = function(map) {
+                var div = L.DomUtil.create('div', 'coords-control');
+                div.innerHTML = `
+                    <select id="coord-format" style="font-size:11px;">
+                        <option value="WGS84_DD">WGS84 DD (Lat,Lng)</option>
+                        <option value="WGS84_DDMMSS">WGS84 DD MM SS (Lat,Lng)</option>
+                        <option value="WebMercator">Web Mercator (EPSG:3857)</option>
+                        <option value="UTM">UTM</option>
+                    </select>
+                    <div id="coords" style="font-size:11px;">Lat: -, Lng: -</div>
+                `;
+                L.DomEvent.disableClickPropagation(div);
+                return div;
+            };
+            return coordControl;
+        };
+
+        /* ---------------------------------------------------------------------------------------------- */
+        // Función para agregar capa GeoJSON
+        /**
+         * Agrega una capa GeoJSON al mapa a partir de un archivo seleccionado.
+         * @param {HTMLInputElement} fileInput - El input de tipo file que contiene el archivo GeoJSON.
+         */
+        function agregarCapaGeoJSON(fileInput) {
+            mostrarSpinner();
+            if (!fileInput.files.length) return;
+            var file = fileInput.files[0];
+            var reader = new FileReader();
+            reader.onload = function(e) {
+            try {
+                var geojson = JSON.parse(e.target.result);
+                var nombre = file.name.replace(/\.[^/.]+$/, "");
+                var capa = L.geoJSON(geojson, {
+                onEachFeature: onEachFeature,
+                style: {
+                    color: "#1976D2",        // línea externa azul medio (sin transparencia)
+                    weight: 2,
+                    opacity: 1,              // sin transparencia en línea
+                    fillColor: "#64B5F6",    // relleno azul claro
+                    fillOpacity: 0.5         // 50% transparencia en relleno
+                }
+                });
+                overlays[nombre] = capa;
+                capa.addTo(map);
+                updateLayerControl();
+                // Hacer zoom a la capa cargada
+                zoomAcapa(capa);
+            } catch (err) {
+                ocultarSpinner
+                alert("Error al cargar el archivo GeoJSON.");
+            }
+            };
+            reader.readAsText(file);
+            ocultarSpinner();
+        }
+
+        /**
+         * Agrega una capa WMS al mapa a partir de una URL proporcionada.
+         * @param {string} url - La URL del servicio WMS.
+         *  * @returns {void}
+         */
+        function agregarCapaWMS(url) {
+            mostrarSpinner();
+            var nombre = prompt("Nombre para la capa WMS:", url);
+            if (!nombre) return;
+            var capa = L.tileLayer.wms(url, {
+            layers: '', // El usuario debe editar esto después
+            format: 'image/png',
+            transparent: true,
+            attribution: url
+            });
+            overlays[nombre] = capa;
+            capa.addTo(map);
+            updateLayerControl();
+            ocultarSpinner();
+        };
+
+        /**
+         * Agrega una capa WFS al mapa a partir de una URL proporcionada.
+         * @param {string} url - La URL del servicio WFS que devuelve GeoJSON.
+         * @returns {void}
+         */
+        function agregarCapaWFS(url) {
+            //https://sig.asturias.es/servicios/services/ClasesAgroecologicas50000/MapServer/WFSServer?service=WFS&version=2.0.0&request=GetFeature&typeName=usos_agrarios&outputFormat=GEOJSON
+            mostrarSpinner();
+            var nombre = "usos agrarios";//prompt("Nombre para la capa WFS:", url);
+            if (!nombre){
+                return;
+                ocultarSpinner();
+            }
+            // Solo soporta WFS que devuelven GeoJSON directamente
+            fetch(url)
+            .then(r => r.json())
+            .then(geojson => {
+                var capa = L.geoJSON(geojson, {
+                    onEachFeature: onEachFeature,
+                    style: {
+                    color: "#4B006E",        // línea externa morado oscuro
+                    weight: 2,
+                    opacity: 1,              // sin transparencia en línea
+                    fillColor: "#A259E6",    // relleno morado
+                    fillOpacity: 0.5         // 50% transparencia en relleno
+                }
+                });
+                    overlays[nombre] = capa;
+                    capa.addTo(map);
+                    updateLayerControl();
+                    zoomAcapa(capa);
+            })
+            .catch(() => alert("No se pudo cargar el WFS (¿devuelve GeoJSON?)"))
+            .finally(() => ocultarSpinner());
+        };
+
+        /* Función para actualizar el control de capas
+            * Elimina todas las capas del control y las vuelve a agregar según el estado actual de overlays.
+            * @returns {void}
+        */
+        function updateLayerControl() {
+            // Remove all overlays from the control
+            for (var key in overlays) {
+                layerControl.removeLayer(overlays[key]);
+            }
+            // Add current overlays to the control
+            for (var key in overlays) {
+                layerControl.addOverlay(overlays[key], key);
+            }
+        };
+
+        /* Función para hacer zoom a una capa
+            * Hace zoom a la capa proporcionada, expandiendo sus límites en un 20% en cada dirección.
+            * Si la capa es un punto, centra el mapa en ese punto con un zoom de 15.
+            * @param {L.Layer} capa - La capa a la que se le hará zoom.
+            * @returns {void}
+        */
+        function zoomAcapa(capa) {
+            if (capa.getBounds && capa.getBounds().isValid()) {
+                var bounds = capa.getBounds();
+                // Expand bounds by 20% in each direction
+                var paddingFactor = 0.2;
+                var sw = bounds.getSouthWest();
+                var ne = bounds.getNorthEast();
+                var latDiff = ne.lat - sw.lat;
+                var lngDiff = ne.lng - sw.lng;
+                var newSw = L.latLng(sw.lat - latDiff * paddingFactor, sw.lng - lngDiff * paddingFactor);
+                var newNe = L.latLng(ne.lat + latDiff * paddingFactor, ne.lng + lngDiff * paddingFactor);
+                var paddedBounds = L.latLngBounds(newSw, newNe);
+                map.fitBounds(paddedBounds);
+            } else if (capa.getLatLng) {
+                map.setView(capa.getLatLng(), 15);
+            }
+        };
+       
+        function intersect(capaEntrada, capaIdent, opcion) {
+            mostrarSpinner();
+            // Verifica que ambas capas sean GeoJSON
+            if (!(capaEntrada instanceof L.GeoJSON) || !(capaIdent instanceof L.GeoJSON)) {
+                alert("Solo se soporta intersección entre capas GeoJSON.");
+                return;
+            }
+
+            // Obtiene los features de ambas capas
+            let featuresEntrada = [];
+            capaEntrada.eachLayer(l => { if (l.feature) featuresEntrada.push(l.feature); });
+            let featuresIdent = [];
+            capaIdent.eachLayer(l => { if (l.feature) featuresIdent.push(l.feature); });
+
+            let intersectFeatures = [];
+            let allFeatures = [];
+
+            featuresEntrada.forEach(f1 => {
+            let intersected = false;
+            featuresIdent.forEach(f2 => {
+                let intersection = turf.intersect(f1, f2);
+                if (intersection) {
+                    intersected = true;
+                    // Si solo queremos los que intersectan, guardamos la intersección
+                    if (opcion === "solo_intersectan") {
+                        // Copia propiedades de ambas features
+                        intersection.properties = Object.assign({}, f1.properties, f2.properties);
+                        intersectFeatures.push(intersection);
+                    }
+                }
+            });
+                if (opcion === "todos") {
+                    // Marca si intersecta o no
+                    let f1copy = JSON.parse(JSON.stringify(f1));
+                    f1copy.properties = Object.assign({}, f1.properties);
+                    f1copy.properties._intersecta = intersected ? "Sí" : "No";
+                    allFeatures.push(f1copy);
+                }
+            });
+
+            let resultLayer;
+            let nombreCapa;
+            if (opcion === "solo_intersectan") {
+                if (intersectFeatures.length === 0) {
+                    alert("No se encontraron intersecciones.");
+                    return;
+            }
+            nombreCapa = "Intersección";
+            resultLayer = L.geoJSON({type: "FeatureCollection", features: intersectFeatures}, {onEachFeature: onEachFeature, style: {color: "red"}});
+            } else {
+            nombreCapa = "Marcado intersección";
+            resultLayer = L.geoJSON({type: "FeatureCollection", features: allFeatures}, {
+                onEachFeature: onEachFeature,
+                style: function(f) {
+                return {color: f.properties._intersecta === "Sí" ? "red" : "blue"};
+                }
+            });
+            }
+
+            overlays[nombreCapa] = resultLayer;
+            resultLayer.addTo(map);
+            updateLayerControl();
+            zoomAcapa(resultLayer);
+            ocultarSpinner();
+        };
+
+        /* Función para hacer zoom a una capa
+            * Hace zoom a la capa proporcionada, expandiendo sus límites en un 20% en cada dirección.
+            * Si la capa es un punto, centra el mapa en ese punto con un zoom de 15.
+            * @param {L.Layer} capa - La capa a la que se le hará zoom.
+            * @returns {void}
+        */
+        function zoomAcapa(capa) {
+            if (capa.getBounds && capa.getBounds().isValid()) {
+                var bounds = capa.getBounds();
+                // Expand bounds by 20% in each direction
+                var paddingFactor = 0.2;
+                var sw = bounds.getSouthWest();
+                var ne = bounds.getNorthEast();
+                var latDiff = ne.lat - sw.lat;
+                var lngDiff = ne.lng - sw.lng;
+                var newSw = L.latLng(sw.lat - latDiff * paddingFactor, sw.lng - lngDiff * paddingFactor);
+                var newNe = L.latLng(ne.lat + latDiff * paddingFactor, ne.lng + lngDiff * paddingFactor);
+                var paddedBounds = L.latLngBounds(newSw, newNe);
+                map.fitBounds(paddedBounds);
+            } else if (capa.getLatLng) {
+                map.setView(capa.getLatLng(), 15);
+            }
+        };
+
+        function mostrarSpinner() {
         let spinner = document.getElementById('spinner-cargando');
         if (!spinner) {
             spinner = document.createElement('div');
@@ -306,216 +746,10 @@
     };
 
     function ocultarSpinner() {
-
         let spinner = document.getElementById('spinner-cargando');
         if (spinner) spinner.style.display = 'none';
     }
-
-    function identificar(e){        
-        let encontrados = [];
-        map.eachLayer(function(layer) {
-            if (layer instanceof L.GeoJSON) {
-            layer.eachLayer(function(fLayer) {
-                // Para polígonos y líneas
-                if (fLayer.feature && fLayer.getBounds && fLayer.getBounds().contains(e.latlng)) {
-                encontrados.push(fLayer);
-                }
-                // Para puntos (marcadores)
-                else if (fLayer.feature && fLayer.getLatLng && fLayer.getLatLng().distanceTo(e.latlng) < 10) {
-                encontrados.push(fLayer);
-                }
-            });
-            }
-        });
-
-        if (encontrados.length > 0) {
-            let contenido = encontrados.map((f, i) =>
-            `<b>Entidad ${i + 1}</b><br>` +
-            Object.entries(f.feature.properties || {})
-                .map(([k, v]) => `<b>${k}:</b> ${v}`)
-                .join('<br>')
-            ).join('<hr style="margin:6px 0;">');
-            // Envuelve el contenido en un div con scroll lateral y altura máxima
-            let popupContent = `<div style="max-height:220px; max-width:340px; overflow:auto;">${contenido}</div>`;
-            L.popup()
-            .setLatLng(e.latlng)
-            .setContent(popupContent)
-            .openOn(map);
-        }
-    }
-  
-    function intersect() {
-        // Obtener todas las capas GeoJSON cargadas en el mapa
-        const geojsonLayers = [];
-        map.eachLayer(function(layer) {
-            if (layer instanceof L.GeoJSON && layer.getLayers().length > 0) {
-                geojsonLayers.push(layer);
-            }
-        });
-
-        if (geojsonLayers.length < 2) {
-            alert('Debe haber al menos dos capas GeoJSON cargadas.');
-            return;
-        }
-
-        // Crear overlay de diálogo
-        const overlay = document.createElement('div');
-        overlay.style.position = 'fixed';
-        overlay.style.top = 0;
-        overlay.style.left = 0;
-        overlay.style.width = '100vw';
-        overlay.style.height = '100vh';
-        overlay.style.background = 'rgba(0,0,0,0.2)';
-        overlay.style.display = 'flex';
-        overlay.style.alignItems = 'center';
-        overlay.style.justifyContent = 'center';
-        overlay.style.zIndex = 2100;
-
-        // Crear diálogo
-        const dialog = document.createElement('div');
-        dialog.style.background = '#fff';
-        dialog.style.padding = '24px 20px 16px 20px';
-        dialog.style.borderRadius = '8px';
-        dialog.style.boxShadow = '0 2px 12px rgba(0,0,0,0.18)';
-        dialog.style.minWidth = '340px';
-        dialog.style.display = 'flex';
-        dialog.style.flexDirection = 'column';
-        dialog.style.gap = '14px';
-
-        // Label y select para capa de entrada
-        const labelEntrada = document.createElement('label');
-        labelEntrada.innerText = 'Capa de entrada:';
-        const selectEntrada = document.createElement('select');
-        selectEntrada.style.padding = '6px 8px';
-        selectEntrada.style.fontSize = '15px';
-        selectEntrada.style.borderRadius = '4px';
-        selectEntrada.style.marginBottom = '8px';
-
-        // Label y select para capa identificadora
-        const labelIdent = document.createElement('label');
-        labelIdent.innerText = 'Capa identificadora:';
-        const selectIdent = document.createElement('select');
-        selectIdent.style.padding = '6px 8px';
-        selectIdent.style.fontSize = '15px';
-        selectIdent.style.borderRadius = '4px';
-
-        // Nombres de capas (si no hay nombre, asignar uno genérico)
-        geojsonLayers.forEach((layer, idx) => {
-            let name = layer.options && layer.options.name ? layer.options.name : `Capa ${idx+1}`;
-            const opt1 = document.createElement('option');
-            opt1.value = idx;
-            opt1.text = name;
-            selectEntrada.appendChild(opt1);
-        });
-
-        // Función para actualizar el select de identificadora
-        function actualizarIdentOptions() {
-            selectIdent.innerHTML = '';
-            geojsonLayers.forEach((layer, idx) => {
-                if (idx != selectEntrada.value) {
-                    let name = layer.options && layer.options.name ? layer.options.name : `Capa ${idx+1}`;
-                    const opt2 = document.createElement('option');
-                    opt2.value = idx;
-                    opt2.text = name;
-                    selectIdent.appendChild(opt2);
-                }
-            });
-        }
-        selectEntrada.onchange = actualizarIdentOptions;
-        actualizarIdentOptions();
-
-        // Botones
-        const btns = document.createElement('div');
-        btns.style.display = 'flex';
-        btns.style.justifyContent = 'flex-end';
-        btns.style.gap = '12px';
-
-        const btnCancelar = document.createElement('button');
-        btnCancelar.innerText = 'Cancelar';
-        btnCancelar.style.padding = '6px 16px';
-        btnCancelar.style.border = 'none';
-        btnCancelar.style.borderRadius = '4px';
-        btnCancelar.style.background = '#eee';
-        btnCancelar.style.cursor = 'pointer';
-
-        const btnAceptar = document.createElement('button');
-        btnAceptar.innerText = 'Ejecutar';
-        btnAceptar.style.padding = '6px 16px';
-        btnAceptar.style.border = 'none';
-        btnAceptar.style.borderRadius = '4px';
-        btnAceptar.style.background = '#1976D2';
-        btnAceptar.style.color = '#fff';
-        btnAceptar.style.cursor = 'pointer';
-
-        btnCancelar.onclick = function() {
-            document.body.removeChild(overlay);
-        };
-
-        btnAceptar.onclick = function() {
-            const idxEntrada = parseInt(selectEntrada.value);
-            const idxIdent = parseInt(selectIdent.value);
-            if (isNaN(idxEntrada) || isNaN(idxIdent) || idxEntrada === idxIdent) {
-                alert('Seleccione capas válidas.');
-                return;
-            }
-            const capaEntrada = geojsonLayers[idxEntrada].toGeoJSON();
-            const capaIdent = geojsonLayers[idxIdent].toGeoJSON();
-
-            // Realizar identity usando turf.js
-            // Para cada feature de entrada, intersectar con cada feature de identificadora
-            const resultadoFeatures = [];
-            capaEntrada.features.forEach(f1 => {
-                let intersected = false;
-                capaIdent.features.forEach(f2 => {
-                    const inter = turf.intersect(f1, f2);
-                    if (inter) {
-                        intersected = true;
-                        // Combinar propiedades
-                        inter.properties = Object.assign({}, f1.properties, f2.properties);
-                        resultadoFeatures.push(inter);
-                    }
-                });
-                // Si no intersecta con ninguna, añadir el feature original
-                if (!intersected) {
-                    resultadoFeatures.push(f1);
-                }
-            });
-
-            const resultadoGeoJSON = {
-                type: "FeatureCollection",
-                features: resultadoFeatures
-            };
-
-            // Añadir la nueva capa al mapa
-            const nuevaCapa = L.geoJSON(resultadoGeoJSON, {
-                style: {
-                    color: '#e53935',         // Borde rojo
-                    weight: 2,
-                    opacity: 1,
-                    fillColor: '#8e24aa',     // Morado
-                    fillOpacity: 0.5          // 50% transparencia
-                }
-            }).addTo(map);
-            nuevaCapa.options.name = 'Resultado Identity';
-            layerControl.addOverlay(nuevaCapa, 'Resultado Identity');
-
-            document.body.removeChild(overlay);
-            alert('Capa resultado añadida al mapa.');
-        };
-
-        btns.appendChild(btnCancelar);
-        btns.appendChild(btnAceptar);
-
-        dialog.appendChild(labelEntrada);
-        dialog.appendChild(selectEntrada);
-        dialog.appendChild(labelIdent);
-        dialog.appendChild(selectIdent);
-        dialog.appendChild(btns);
-
-        overlay.appendChild(dialog);
-        document.body.appendChild(overlay);
-        selectEntrada.focus();
-    }
-  </script>
+        
+    </script>
 </body>
 </html>
