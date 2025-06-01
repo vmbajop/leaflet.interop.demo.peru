@@ -1,0 +1,32 @@
+{
+    "WFS_Disponibles": [
+        {
+            "id": "SUTrujillo",
+            "nombre": "Sectores Urbano de Trujillos",
+            "url": "http://sam.swisslm.ch:8188/geoserver/sam/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=sam%3Asectores_urbanos_trujillo_w&maxFeatures=50&outputFormat=application%2Fjson",
+            "tipo": "GeoJSON",
+            "descripcion": "Zonas urbanas de Trujillo"
+        },
+        {
+            "id": "SICUNedf",
+            "nombre": "SICUN - Edificaciones",
+            "url": "http://sam.swisslm.ch:8188/geoserver/sam/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=sam%3Asicun_edificaciones_w&maxFeatures=50&outputFormat=application%2Fjson",
+            "tipo": "GeoJSON",
+            "descripcion": "Cinco zonas edificadas de ejemplo"
+        },
+        {
+            "id": "SICUNlote",
+            "nombre": "SICUN - Lores",
+            "url": "http://sam.swisslm.ch:8188/geoserver/sam/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=sam%3Asicun_lote_w&maxFeatures=50&outputFormat=application%2Fjson",
+            "tipo": "GeoJSON",
+            "descripcion": "Superposicion de interés"
+        },
+        {
+            "id": "ZUTrujillo",
+            "nombre": "Zonificación Urbana de Trujillo",
+            "url": "http://sam.swisslm.ch:8188/geoserver/sam/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=sam%3Azonificacion_urbana_trujillo_w&maxFeatures=50&outputFormat=application%2Fjson",
+            "tipo": "GeoJSON",
+            "descripcion": "Mapa complejo del que sacar datos interesantes"
+        }
+    ]
+}

@@ -1,0 +1,197 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "id": "sicun_edificaciones_w.fid-33a1db6a_1971ed6f5e2_-7e6b",
+            "geometry": {
+                "type": "MultiPolygon",
+                "coordinates": [
+                    [
+                        [
+                            [-79.04643129, -8.14916276, 0],
+                            [-79.04623021, -8.14932555, 0],
+                            [-79.04629667, -8.14938727, 0],
+                            [-79.04618327, -8.14947372, 0],
+                            [-79.04629568, -8.14959197, 0],
+                            [-79.04657427, -8.14933232, 0],
+                            [-79.04643129, -8.14916276, 0]
+                        ]
+                    ]
+                ]
+            },
+            "geometry_name": "geometria",
+            "properties": {
+                "t_id": 161,
+                "t_basket": 135,
+                "t_ili_tid": null,
+                "codigo_edificacion": "001001",
+                "codigo_tipo_edificacion": "1",
+                "codigo_lote": "001",
+                "nombre_edificacion": "Juan",
+                "numero_edificacion": "Peres",
+                "codigo_estado": "1",
+                "estado": "1",
+                "bien_comun": "1",
+                "codigo_poligono": "001",
+                "id_unidad_espacial": "1"
+            }
+        },
+        {
+            "type": "Feature",
+            "id": "sicun_edificaciones_w.fid-33a1db6a_1971ed6f5e2_-7e6a",
+            "geometry": {
+                "type": "MultiPolygon",
+                "coordinates": [
+                    [
+                        [
+                            [-79.04094705, -8.14704671, 0],
+                            [-79.03996489, -8.14760978, 0],
+                            [-79.04030241, -8.14777999, 0],
+                            [-79.04053381, -8.14779885, 0],
+                            [-79.04062376, -8.14761297, 0],
+                            [-79.04089107, -8.1475699, 0],
+                            [-79.04091834, -8.14745469, 0],
+                            [-79.04107092, -8.14720701, 0],
+                            [-79.04094705, -8.14704671, 0]
+                        ]
+                    ]
+                ]
+            },
+            "geometry_name": "geometria",
+            "properties": {
+                "t_id": 162,
+                "t_basket": 135,
+                "t_ili_tid": null,
+                "codigo_edificacion": "002",
+                "codigo_tipo_edificacion": null,
+                "codigo_lote": "002",
+                "nombre_edificacion": "hotel",
+                "numero_edificacion": null,
+                "codigo_estado": null,
+                "estado": null,
+                "bien_comun": null,
+                "codigo_poligono": null,
+                "id_unidad_espacial": null
+            }
+        },
+        {
+            "type": "Feature",
+            "id": "sicun_edificaciones_w.fid-33a1db6a_1971ed6f5e2_-7e69",
+            "geometry": {
+                "type": "MultiPolygon",
+                "coordinates": [
+                    [
+                        [
+                            [-79.04267733, -8.1464183, 0],
+                            [-79.04254889, -8.14623295, 0],
+                            [-79.04240623, -8.14631388, 0],
+                            [-79.04249202, -8.14640451, 0],
+                            [-79.04248299, -8.14648609, 0],
+                            [-79.04257768, -8.14652091, 0],
+                            [-79.04259523, -8.14645656, 0],
+                            [-79.04267733, -8.1464183, 0]
+                        ]
+                    ]
+                ]
+            },
+            "geometry_name": "geometria",
+            "properties": {
+                "t_id": 163,
+                "t_basket": 135,
+                "t_ili_tid": null,
+                "codigo_edificacion": "001",
+                "codigo_tipo_edificacion": null,
+                "codigo_lote": "017",
+                "nombre_edificacion": "hotel juan",
+                "numero_edificacion": null,
+                "codigo_estado": null,
+                "estado": null,
+                "bien_comun": null,
+                "codigo_poligono": null,
+                "id_unidad_espacial": null
+            }
+        },
+        {
+            "type": "Feature",
+            "id": "sicun_edificaciones_w.fid-33a1db6a_1971ed6f5e2_-7e68",
+            "geometry": {
+                "type": "MultiPolygon",
+                "coordinates": [
+                    [
+                        [
+                            [-79.0454816, -8.14424088, 0],
+                            [-79.04508768, -8.14368051, 0],
+                            [-79.04465528, -8.14394477, 0],
+                            [-79.04487771, -8.14430671, 0],
+                            [-79.04521172, -8.14477228, 0],
+                            [-79.04550567, -8.14461045, 0],
+                            [-79.0454816, -8.14424088, 0]
+                        ]
+                    ]
+                ]
+            },
+            "geometry_name": "geometria",
+            "properties": {
+                "t_id": 164,
+                "t_basket": 135,
+                "t_ili_tid": null,
+                "codigo_edificacion": "521",
+                "codigo_tipo_edificacion": null,
+                "codigo_lote": "500",
+                "nombre_edificacion": "hotel interlis",
+                "numero_edificacion": null,
+                "codigo_estado": "02",
+                "estado": null,
+                "bien_comun": null,
+                "codigo_poligono": null,
+                "id_unidad_espacial": null
+            }
+        },
+        {
+            "type": "Feature",
+            "id": "sicun_edificaciones_w.fid-33a1db6a_1971ed6f5e2_-7e67",
+            "geometry": {
+                "type": "MultiPolygon",
+                "coordinates": [
+                    [
+                        [
+                            [-79.0424565, -8.14405869, 0],
+                            [-79.04234527, -8.14391137, 0],
+                            [-79.04220341, -8.14400168, 0],
+                            [-79.04232055, -8.14414609, 0],
+                            [-79.04247064, -8.14417911, 0],
+                            [-79.0424565, -8.14405869, 0]
+                        ]
+                    ]
+                ]
+            },
+            "geometry_name": "geometria",
+            "properties": {
+                "t_id": 165,
+                "t_basket": 135,
+                "t_ili_tid": null,
+                "codigo_edificacion": "100",
+                "codigo_tipo_edificacion": null,
+                "codigo_lote": "850",
+                "nombre_edificacion": "casa",
+                "numero_edificacion": null,
+                "codigo_estado": null,
+                "estado": null,
+                "bien_comun": null,
+                "codigo_poligono": null,
+                "id_unidad_espacial": null
+            }
+        }
+    ],
+    "totalFeatures": 5,
+    "numberMatched": 5,
+    "numberReturned": 5,
+    "timeStamp": "2025-05-31T17:41:57.133Z",
+    "crs": {
+        "type": "name",
+        "properties": {
+            "name": "urn:ogc:def:crs:EPSG::4326"
+        }
+    }
+}

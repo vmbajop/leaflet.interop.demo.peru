@@ -73,6 +73,12 @@
         ocultarSpinner();
 
         /* Boton de control de carga de capas - Mejorar sacando elementos a otras funciones */
+        // Cargar la configuración de servicios WFS
+        let serviciosWFS = [];
+        fetch('serviciosWFS.config.json')
+            .then(r => r.json())
+            .then(json => { serviciosWFS = json.WFS_Disponibles || []; });
+
         var AddLayerButton = L.Control.extend({
             options: { position: 'topright' },
             onAdd: function(map) {
@@ -115,14 +121,20 @@
                 dialog.style.minWidth = '320px';
                 dialog.innerHTML = `
                 <label>Tipo de capa:
-                <select id="tipo-capa">
+                    <select id="tipo-capa">
                     <option value="GeoJSON">GeoJSON</option>
                     <option value="WMS">WMS</option>
                     <option value="WFS">WFS</option>
-                </select>
+                    </select>
                 </label>
                 <div id="geojson-file-div" style="margin:8px 0;">
                     <input type="file" id="geojson-file" accept=".geojson,.json" style="width:100%;" />
+                </div>
+                <div id="wfs-div" style="margin:8px 0; display:none;">
+                    <label>Servicio WFS:
+                    <select id="wfs-servicio" style="width:100%;"></select>
+                    </label>
+                    <input type="text" id="wfs-url" placeholder="URL del servicio WFS" style="width:100%;margin-top:4px;" />
                 </div>
                 <div id="url-div" style="margin:8px 0;">
                     <input type="text" id="capa-url" placeholder="URL del servicio" style="width:100%;" />
@@ -131,12 +143,70 @@
                 <button id="cancelar-capa" style="margin-top:6px;width:100%;">Cancelar</button>
                 `;
 
+                // Inicializar combo WFS
+                function fillWFSCombo() {
+                let wfsCombo = dialog.querySelector('#wfs-servicio');
+                if (!wfsCombo) return;
+                wfsCombo.innerHTML = '';
+                if (serviciosWFS && serviciosWFS.length > 0) {
+                    serviciosWFS.forEach(s => {
+                    let opt = document.createElement('option');
+                    opt.value = s.url;
+                    opt.textContent = s.nombre;
+                    wfsCombo.appendChild(opt);
+                    });
+                }
+                // Opción manual
+                let optManual = document.createElement('option');
+                optManual.value = '__manual__';
+                optManual.textContent = 'Introducir url de WFS manualmente';
+                wfsCombo.appendChild(optManual);
+                }
+
+                // Mostrar/ocultar campos según tipo de capa
                 function updateDialogFields() {
                 let tipo = dialog.querySelector('#tipo-capa').value;
                 dialog.querySelector('#geojson-file-div').style.display = (tipo === 'GeoJSON') ? 'block' : 'none';
-                dialog.querySelector('#url-div').style.display = (tipo === 'GeoJSON') ? 'none' : 'block';
+                dialog.querySelector('#url-div').style.display = (tipo === 'WMS') ? 'block' : 'none';
+                dialog.querySelector('#wfs-div').style.display = (tipo === 'WFS') ? 'block' : 'none';
+                if (tipo === 'WFS') {
+                    fillWFSCombo();
+                    // Por defecto, selecciona el primer servicio
+                    let wfsCombo = dialog.querySelector('#wfs-servicio');
+                    if (wfsCombo) {
+                    wfsCombo.selectedIndex = 0;
+                    let url = wfsCombo.value;
+                    let urlInput = dialog.querySelector('#wfs-url');
+                    if (url !== '__manual__') {
+                        urlInput.value = url;
+                        urlInput.readOnly = true;
+                    } else {
+                        urlInput.value = '';
+                        urlInput.readOnly = false;
+                    }
+                    }
                 }
-                dialog.querySelector('#tipo-capa').addEventListener('change', updateDialogFields);
+                }
+
+                // Cambiar url cuando cambia el combo WFS
+                dialog.addEventListener('change', function(e) {
+                if (e.target && e.target.id === 'wfs-servicio') {
+                    let wfsCombo = dialog.querySelector('#wfs-servicio');
+                    let urlInput = dialog.querySelector('#wfs-url');
+                    let url = wfsCombo.value;
+                    if (url === '__manual__') {
+                    urlInput.value = '';
+                    urlInput.readOnly = false;
+                    } else {
+                    urlInput.value = url;
+                    urlInput.readOnly = true;
+                    }
+                }
+                if (e.target && e.target.id === 'tipo-capa') {
+                    updateDialogFields();
+                }
+                });
+
                 updateDialogFields();
 
                 dialog.querySelector('#confirmar-capa').onclick = function() {
@@ -147,8 +217,16 @@
                     let url = dialog.querySelector('#capa-url').value.trim();
                     if (url) agregarCapaWMS(url);
                 } else if (tipo === 'WFS') {
-                    let url = dialog.querySelector('#capa-url').value.trim();
-                    if (url) agregarCapaWFS(url);
+                    let wfsCombo = dialog.querySelector('#wfs-servicio');
+                    let urlInput = dialog.querySelector('#wfs-url');
+                    let url = urlInput.value.trim();
+                    let nombre = '';
+                    if (wfsCombo.value === '__manual__') {
+                    nombre = prompt("Nombre para la capa WFS:", url) || url;
+                    } else {
+                    nombre = wfsCombo.options[wfsCombo.selectedIndex].textContent;
+                    }
+                    if (url) agregarCapaWFS(url, nombre);
                 }
                 document.body.removeChild(modalBg);
                 };
@@ -168,6 +246,8 @@
 
         map.addControl(new AddLayerButton());
 
+        
+
         /* ---------------------------------------------------------------------------------------------- */
         // Botón para ejecutar superposición de capas
         /* ---------------------------------------------------------------------------------------------- */
@@ -175,8 +255,8 @@
         var IntersectButton = L.Control.extend({
             options: { position: 'topright' },
             onAdd: function(map) {
-                var container = L.DomUtil.create('div', 'leaflet-bar add-layer-control-container');
-                container.style.marginTop = '60px';
+                var container = L.DomUtil.create('div', 'leaflet-bar intersect-layer-control-container');
+                container.style.marginTop = '110px'; // Cambia el margen para evitar superposición
 
                 var btn = L.DomUtil.create('button', 'add-layer-control', container);
                 btn.style.display = 'block';
@@ -257,22 +337,7 @@
             onRemove: function(map) {}
         });
 
-        map.addControl(new IntersectButton());    
-
-        
-
-        
-
-        function updateLayerControl() {
-            // Remove all overlays from the control
-            for (var key in overlays) {
-                layerControl.removeLayer(overlays[key]);
-            }
-            // Add current overlays to the control
-            for (var key in overlays) {
-                layerControl.addOverlay(overlays[key], key);
-            }
-        };
+        map.addControl(new IntersectButton());
         
         function updateCoords(e) {
             let format = document.getElementById('coord-format').value;
@@ -623,39 +688,52 @@
          * Agrega una capa WFS al mapa a partir de una URL proporcionada.
          * @param {string} url - La URL del servicio WFS que devuelve GeoJSON.
          * @returns {void}
-         */
-        function agregarCapaWFS(url) {
-            //https://sig.asturias.es/servicios/services/ClasesAgroecologicas50000/MapServer/WFSServer?service=WFS&version=2.0.0&request=GetFeature&typeName=usos_agrarios&outputFormat=GEOJSON
+         */        
+        function agregarCapaWFS(url, nombre) {
             mostrarSpinner();
-            var nombre = "Zonificación";//prompt("Nombre para la capa WFS:", url);            
-            // Solo soporta WFS que devuelven GeoJSON directamente
+            if (!nombre) nombre = "WFS";
             fetch(url)
             .then(r => r.json())
             .then(geojson => {
+                var color = getRandomColor(true);
                 var capa = L.geoJSON(geojson, {
-                    onEachFeature: onEachFeature,
+                    onEachFeature: onEachFeature,                    
                     style: {
-                    color: "#4B006E",        // línea externa morado oscuro
-                    weight: 2,
-                    opacity: 1,              // sin transparencia en línea
-                    fillColor: "#A259E6",    // relleno morado
-                    fillOpacity: 0.5         // 50% transparencia en relleno
-                }
+                        color: color,
+                        weight: 2,
+                        opacity: 1,
+                        fillColor: color/*,
+                        fillOpacity: 0.5*/
+                    }
                 });
-                    overlays[nombre] = capa;
-                    capa.addTo(map);
-                    updateLayerControl();
-                    zoomAcapa(capa);
+                overlays[nombre] = capa;
+                capa.addTo(map);
+                updateLayerControl();
+                zoomAcapa(capa);
             })
             .catch(() => {
-                console.alert("No se pudo cargar el WFS (¿devuelve GeoJSON?)");
-                //agregarCapaWFSfromJSON(url);
+                alert("No se pudo cargar el WFS (¿devuelve GeoJSON?)");
             })
             .finally(() => ocultarSpinner());
-        };
-
+        }
         
-
+        function getRandomColor(rgba) {
+            // Genera un color aleatorio en formato hexadecimal o rgba según el parámetro
+            var r = Math.floor(Math.random() * 256);
+            var g = Math.floor(Math.random() * 256);
+            var b = Math.floor(Math.random() * 256);
+            if (rgba === true) {
+                return `rgba(${r},${g},${b},0.5)`;
+            } else {
+                // Hexadecimal
+                return (
+                    "#" +
+                    r.toString(16).padStart(2, "0") +
+                    g.toString(16).padStart(2, "0") +
+                    b.toString(16).padStart(2, "0")
+                ).toUpperCase();
+            }
+        };
         /* Función para actualizar el control de capas
             * Elimina todas las capas del control y las vuelve a agregar según el estado actual de overlays.
             * @returns {void}
