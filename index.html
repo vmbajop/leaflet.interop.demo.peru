@@ -4,39 +4,11 @@
     <meta charset="utf-8" />
     <title>Visor Leaflet Perú</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Favicon -->
+    <link rel="icon" href="/libs/leaflet/favicon.ico" type="image/x-icon" />
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="/libs/leaflet/leaflet.css" />
-    <style>
-        html, body {
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            overflow-x: hidden;
-        }
-        #map { height: 100vh; width: 100vw; }
-        .coords-control {
-            background: white;
-            padding: 6px 10px;
-            border-radius: 4px;
-            font-size: 13px;
-            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
-        }
-        .popup-scroll {
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        .add-layer-control {
-            background: white;
-            padding: 8px 12px;
-            border-radius: 4px;
-            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
-            font-size: 13px;
-        }
-        .add-layer-control input, .add-layer-control select, .add-layer-control button {
-            margin: 2px 0;
-            width: 100%;
-        }
-    </style>
+    <link rel="stylesheet" href="/estilos/local.css" />
 </head>
 <body>
     <div id="map"></div>
@@ -47,11 +19,33 @@
     <!-- Proj4Leaflet -->
     <script src="https://unpkg.com/proj4leaflet"></script>
     <!-- turf.js -->
-     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <script>
         /* Mapa y capa base */
         var map = L.map('map').setView([-9.19, -75.0152], 6);
+        
+        // #region EVENTOS DE MAPA map.on()
         map.on('mousemove', updateCoords);
+        //Dejo esta función para que se pueda usar en el futuro
+        map.on('layerremove', function(e) {
+            for (var key in overlays) {
+                if (overlays[key] === e.layer) {
+                    delete overlays[key];
+                    updateLayerControl();
+                    break;
+                }
+            }
+        });
+
+        /* Actualiza el control de capas cuando se agrega una nueva capa.
+         * Se llama  al agregar una capa GeoJSON o WMS.
+         * @param {Object} e - Evento de adición de capa.
+         * @returns {void}
+         */
+        map.on('layeradd', function(e) {
+            updateLayerControl();
+        });
+        // #endregion
         
         mostrarSpinner();
 
@@ -72,7 +66,11 @@
 
         ocultarSpinner();
 
-        /* Boton de control de carga de capas - Mejorar sacando elementos a otras funciones */
+        // #region BOTONES
+
+        /* ---------------------------------------------------------------------------------------------- */
+        // Botón para cargar capas
+        /* ---------------------------------------------------------------------------------------------- */
         var AddLayerButton = L.Control.extend({
             options: { position: 'topright' },
             onAdd: function(map) {
@@ -112,43 +110,118 @@
                 dialog.style.padding = '20px';
                 dialog.style.borderRadius = '8px';
                 dialog.style.boxShadow = '0 2px 12px rgba(0,0,0,0.3)';
-                dialog.style.minWidth = '320px';
+                dialog.style.minWidth = '340px';
                 dialog.innerHTML = `
                 <label>Tipo de capa:
-                <select id="tipo-capa">
+                    <select id="tipo-capa">
                     <option value="GeoJSON">GeoJSON</option>
                     <option value="WMS">WMS</option>
                     <option value="WFS">WFS</option>
-                </select>
+                    </select>
                 </label>
                 <div id="geojson-file-div" style="margin:8px 0;">
                     <input type="file" id="geojson-file" accept=".geojson,.json" style="width:100%;" />
                 </div>
+                <div id="wfs-div" style="margin:8px 0; display:none;">
+                    <label>Servicio WFS:
+                    <select id="wfs-servicio" style="width:100%;">
+                        <option value="">Introduzca un servicio WFS</option>
+                    </select>
+                    </label>
+                    <input type="text" id="capa-url" placeholder="URL del servicio" style="width:100%;margin-top:6px;" />
+                </div>
                 <div id="url-div" style="margin:8px 0;">
-                    <input type="text" id="capa-url" placeholder="URL del servicio" style="width:100%;" />
+                    <input type="text" id="capa-url-wms" placeholder="URL del servicio" style="width:100%;" />
                 </div>
                 <button id="confirmar-capa" style="margin-top:10px;width:100%;">Agregar capa</button>
                 <button id="cancelar-capa" style="margin-top:6px;width:100%;">Cancelar</button>
                 `;
 
+                // Cargar servicios WFS desde el archivo JSON
+                let wfsServicios = [];
+                function cargarServiciosWFS() {
+                fetch('serviciosWFS.config.json')
+                    .then(r => r.json())
+                    .then(json => {
+                    wfsServicios = json.WFS_Disponibles || [];
+                    let select = dialog.querySelector('#wfs-servicio');
+                    // Limpiar y agregar opción manual
+                    select.innerHTML = `<option value="">Introduzca un servicio WFS</option>`;
+                    wfsServicios.forEach((serv, idx) => {
+                        let opt = document.createElement('option');
+                        opt.value = idx;
+                        opt.textContent = serv.nombre;
+                        select.appendChild(opt);
+                    });
+                    // Opción manual
+                    let optManual = document.createElement('option');
+                    optManual.value = 'manual';
+                    optManual.textContent = 'Introducir url de WFS manualmente';
+                    select.appendChild(optManual);
+                    });
+                }
+
                 function updateDialogFields() {
                 let tipo = dialog.querySelector('#tipo-capa').value;
                 dialog.querySelector('#geojson-file-div').style.display = (tipo === 'GeoJSON') ? 'block' : 'none';
-                dialog.querySelector('#url-div').style.display = (tipo === 'GeoJSON') ? 'none' : 'block';
+                dialog.querySelector('#url-div').style.display = (tipo === 'WMS') ? 'block' : 'none';
+                dialog.querySelector('#wfs-div').style.display = (tipo === 'WFS') ? 'block' : 'none';
+                if (tipo === 'WFS') {
+                    cargarServiciosWFS();
+                    dialog.querySelector('#capa-url').value = '';
                 }
+                }
+
                 dialog.querySelector('#tipo-capa').addEventListener('change', updateDialogFields);
                 updateDialogFields();
+
+                // WFS combo y url sync
+                dialog.addEventListener('change', function(e) {
+                if (e.target && e.target.id === 'wfs-servicio') {
+                    let idx = e.target.value;
+                    let urlInput = dialog.querySelector('#capa-url');
+                    if (idx === '') {
+                    urlInput.value = '';
+                    urlInput.readOnly = true;
+                    } else if (idx === 'manual') {
+                    urlInput.value = '';
+                    urlInput.readOnly = false;
+                    urlInput.placeholder = "Introduzca la URL del servicio WFS";
+                    } else {
+                    let serv = wfsServicios[parseInt(idx)];
+                    urlInput.value = serv ? serv.url : '';
+                    urlInput.readOnly = true;
+                    }
+                }
+                });
 
                 dialog.querySelector('#confirmar-capa').onclick = function() {
                 let tipo = dialog.querySelector('#tipo-capa').value;
                 if (tipo === 'GeoJSON') {
                     agregarCapaGeoJSON(dialog.querySelector('#geojson-file'));
                 } else if (tipo === 'WMS') {
-                    let url = dialog.querySelector('#capa-url').value.trim();
+                    let url = dialog.querySelector('#capa-url-wms').value.trim();
                     if (url) agregarCapaWMS(url);
                 } else if (tipo === 'WFS') {
+                    let select = dialog.querySelector('#wfs-servicio');
+                    let idx = select.value;
                     let url = dialog.querySelector('#capa-url').value.trim();
-                    if (url) agregarCapaWFS(url);
+                    let nombre = '';
+                    if (idx === '') {
+                    alert('Seleccione un servicio WFS o introduzca uno manualmente.');
+                    return;
+                    }
+                    if (idx === 'manual') {
+                    if (!url) {
+                        alert('Introduzca la URL del servicio WFS.');
+                        return;
+                    }
+                    nombre = prompt('Nombre para la capa WFS:', url) || url;
+                    } else {
+                    let serv = wfsServicios[parseInt(idx)];
+                    nombre = serv ? serv.nombre : url;
+                    }
+                    if (url && nombre) agregarCapaWFS(url, nombre);
                 }
                 document.body.removeChild(modalBg);
                 };
@@ -166,7 +239,7 @@
             onRemove: function(map) {}
         });
 
-        map.addControl(new AddLayerButton());
+        map.addControl(new AddLayerButton());        
 
         /* ---------------------------------------------------------------------------------------------- */
         // Botón para ejecutar superposición de capas
@@ -257,23 +330,11 @@
             onRemove: function(map) {}
         });
 
-        map.addControl(new IntersectButton());    
-
+        map.addControl(new IntersectButton());
         
+        // #endregion
 
-        
-
-        function updateLayerControl() {
-            // Remove all overlays from the control
-            for (var key in overlays) {
-                layerControl.removeLayer(overlays[key]);
-            }
-            // Add current overlays to the control
-            for (var key in overlays) {
-                layerControl.addOverlay(overlays[key], key);
-            }
-        };
-        
+        // #region CONTROL COORDENADAS MAP
         function updateCoords(e) {
             let format = document.getElementById('coord-format').value;
             let lat = e.latlng.lat, lng = e.latlng.lng;
@@ -314,56 +375,95 @@
             return {zone: zone, e: utm[0], n: utm[1]};
         }
 
-        
+        // #endregion
 
-        /*  
-        * Evento de clic en el mapa para mostrar información de entidades
-        * Recorre todas las capas superpuestas y verifica si el punto clicado está dentro de sus límites.
-        * Si es así, muestra un popup con la información de las entidades.
-        * Para capas WMS, intenta obtener información usando GetFeatureInfo.
+        // #region IDENTIFY
+
+        /* 
+        * Maneja el evento de clic en el mapa para mostrar información de entidades GeoJSON y WMS.
+        * @param {Object} e - Evento de clic del mapa.
         */
         map.on('click', function(e) {
             var results = [];
+            var maxFieldLen = 0;
+            var maxValueLen = 0;
+            var maxKey = '';
+            var maxValue = '';
+
             Object.values(overlays).forEach(function(layer) {
-                if (layer instanceof L.GeoJSON) {
-                    layer.eachLayer(function(l) {
-                        if (l.getBounds && l.getBounds().contains(e.latlng)) {
-                            results.push(l.feature);
-                        } else if (l.getLatLng && l.getLatLng().distanceTo(e.latlng) < 10) {
-                            results.push(l.feature);
-                        }
+            if (layer instanceof L.GeoJSON) {
+                layer.eachLayer(function(l) {
+                if (l.getBounds && l.getBounds().contains(e.latlng)) {
+                    results.push(l.feature);
+                } else if (l.getLatLng && l.getLatLng().distanceTo(e.latlng) < 10) {
+                    results.push(l.feature);
+                }
+                });
+            }
+            // Para WMS, salta a GetFeatureInfo()
+            if (layer instanceof L.TileLayer.WMS) {
+                var url = getFeatureInfoUrl(layer, e.latlng);
+                if (url) {
+                fetch(url)
+                    .then(r => r.text())
+                    .then(txt => {
+                    var html = `<div class="popup-scroll">${txt}</div>`;
+                    L.popup({maxWidth: 800, minWidth: 300, autoPan: true})
+                        .setLatLng(e.latlng)
+                        .setContent(html)
+                        .openOn(map);
                     });
                 }
-                // For WMS, try GetFeatureInfo
-                if (layer instanceof L.TileLayer.WMS) {
-                    var url = getFeatureInfoUrl(layer, e.latlng);
-                    if (url) {
-                        fetch(url)
-                            .then(r => r.text())
-                            .then(txt => {
-                                var html = `<div class="popup-scroll">${txt}</div>`;
-                                L.popup({maxWidth: 400})
-                                    .setLatLng(e.latlng)
-                                    .setContent(html)
-                                    .openOn(map);
-                            });
-                    }
+            }
+            });
+
+            // Encuentra el campo identificador y el ancho máximo de los valores
+            results.forEach(function(f) {
+            var props = f.properties || {};
+            Object.keys(props).forEach(function(k) {
+                if (k.length > maxFieldLen) {
+                maxFieldLen = k.length;
+                maxKey = k;
+                }
+                var val = props[k] != null ? String(props[k]) : '';
+                if (val.length > maxValueLen) {
+                maxValueLen = val.length;
+                maxValue = val;
                 }
             });
+            });
+
+            // Determina el campo identificador preferido
+            function getIdField(props) {
+            var keys = Object.keys(props);
+            var idField = keys.find(k => /^id$/i.test(k)) ||
+                      keys.find(k => /^objectid$/i.test(k)) ||
+                      keys.find(k => /^fid$/i.test(k)) ||
+                      keys[0];
+            return idField;
+            }
+
             if (results.length > 0) {
-                var html = '<div class="popup-scroll">';
-                results.forEach(function(f, i) {
-                    html += `<b>Entidad ${i+1}</b><table>`;
-                    for (var k in f.properties) {
-                        html += `<tr><td><strong>${k}</strong></td><td>${f.properties[k]}</td></tr>`;
-                    }
-                    html += '</table><hr>';
-                });
-                html += '</div>';
-                L.popup({maxWidth: 400})
-                    .setLatLng(e.latlng)
-                    .setContent(html)
-                    .openOn(map);
+            // Calcula el ancho mínimo necesario para la tabla
+            var charWidth = 8; // px, aproximado
+            var minWidth = Math.max(300, (maxFieldLen + maxValueLen) * charWidth + 80);
+
+            var html = `<div class="popup-scroll" style="min-width:${minWidth}px;max-width:900px;">`;
+            results.forEach(function(f, i) {
+                var props = f.properties || {};
+                var idField = getIdField(props);
+                var idValue = props[idField] !== undefined ? props[idField] : (i+1);
+                html += `<b>${idField}: ${idValue}</b><table style="width:100%;table-layout:auto;">`;
+                for (var k in props) {
+                html += `<tr><td style="font-weight:bold;vertical-align:top;">${k}</td><td style="word-break:break-all;">${props[k]}</td></tr>`;
+                }
+                html += '</table><hr>';
+            });
+            html += '</div>';
+            L.popup({maxWidth: 900, minWidth: minWidth, autoPan: true})
+                .setLatLng(e.latlng)
+                .setContent(html)
+                .openOn(map);
             }
         });
 
@@ -416,21 +516,9 @@
             var url = layer._url + L.Util.getParamString(params, layer._url, true);
             return url;
         }
-
-        // Remove layer from overlays and update control when removed from map
-        map.on('layerremove', function(e) {
-            for (var key in overlays) {
-                if (overlays[key] === e.layer) {
-                    delete overlays[key];
-                    updateLayerControl();
-                    break;
-                }
-            }
-        });
-        map.on('layeradd', function(e) {
-            updateLayerControl();
-        });
-
+        // #endregion
+      
+        // #region FUNCIONES
         function addBasemaps(){
             let osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
@@ -479,9 +567,7 @@
             };
             return coordControl;
         };
-
-        /* ---------------------------------------------------------------------------------------------- */
-        // Función para agregar capa GeoJSON
+        
         /**
          * Agrega una capa GeoJSON al mapa a partir de un archivo seleccionado.
          * @param {HTMLInputElement} fileInput - El input de tipo file que contiene el archivo GeoJSON.
@@ -498,14 +584,15 @@
                 var geojson = geojson_in; // Asignar directamente si no se reproyecta
                 var nombre = file.name.replace(/\.[^/.]+$/, "");
                 var capa = L.geoJSON(geojson, {
-                onEachFeature: onEachFeature,
-                style: {
+                onEachFeature: "", //onEachFeature,
+                /*style: {
                     color: "#1976D2",        // línea externa azul medio (sin transparencia)
                     weight: 2,
                     opacity: 1,              // sin transparencia en línea
                     fillColor: "#64B5F6",    // relleno azul claro
                     fillOpacity: 0.5         // 50% transparencia en relleno
-                }
+                }*/
+               style: getRandomStyle() // Estilo con color aleatorio
                 });
                 overlays[nombre] = capa;
                 capa.addTo(map);
@@ -522,86 +609,52 @@
         };
 
         /**
-         * Reproyecta una capa GeoJSON a EPSG:4326 (Leaflet por defecto) si no coincide el sistema de coordenadas.
-         * @param {Object} geojson - Objeto GeoJSON.
-         * @returns {Object} - GeoJSON reproyectado a EPSG:4326.
+         * Devuelve un objeto de estilo Leaflet con color de línea aleatorio (excepto blanco, amarillo y rojo).
+         * @returns {Object} Objeto de estilo para Leaflet.
          */
-        function reproyectarGeoJSON(geojson) {
-            try {
-                // Verifica si proj4 está cargado
-                if (typeof proj4 === 'undefined') {
-                    throw new Error("Proj4JS no está cargado. Asegúrate de incluir la librería.");
+        function getRandomStyle() {
+            // Colores prohibidos en formato hexadecimal
+            const forbidden = ['#ffffff', '#ffff00', '#ff0000'];
+            let color;
+            // Genera un color aleatorio que no sea blanco, amarillo ni rojo
+            do {
+                // Genera aleatoriamente H, S y L para mayor variedad
+                const h = Math.floor(Math.random() * 360); // Hue: 0-359
+                const s = Math.floor(40 + Math.random() * 50); // Saturation: 40-90%
+                const l = Math.floor(30 + Math.random() * 50); // Lightness: 30-80%
+                // Convierte HSL a RGB y luego a HEX
+                function hslToHex(h, s, l) {
+                    s /= 100; l /= 100;
+                    let c = (1 - Math.abs(2 * l - 1)) * s;
+                    let x = c * (1 - Math.abs((h / 60) % 2 - 1));
+                    let m = l - c/2;
+                    let rgb = [0,0,0];
+                    if (h < 60) rgb = [c, x, 0];
+                    else if (h < 120) rgb = [x, c, 0];
+                    else if (h < 180) rgb = [0, c, x];
+                    else if (h < 240) rgb = [0, x, c];
+                    else if (h < 300) rgb = [x, 0, c];
+                    else rgb = [c, 0, x];
+                    return "#" + rgb.map(v => {
+                        let hex = Math.round((v + m) * 255).toString(16);
+                        return hex.padStart(2, '0');
+                    }).join('');
                 }
-            
-                // Detecta CRS en el GeoJSON (soporta crs.properties.name o crs.properties.code)
-                let crs = geojson.crs && (geojson.crs.properties && (geojson.crs.properties.name || geojson.crs.properties.code));
-                if (!crs) return geojson; // No CRS declarado, se asume EPSG:4326
-
-                let srcCrsRaw = geojson.crs.properties.name || geojson.crs.properties.code || '';
-                let srcCrs = srcCrsRaw.toUpperCase();
-
-                // Extrae el código EPSG de URN como "urn:ogc:def:crs:EPSG::32717"
-                let epsgMatch = srcCrs.match(/EPSG(?::|::)(\d+)/);
-                let srcProj = '';
-                if (epsgMatch && epsgMatch[1]) {
-                    srcProj = 'EPSG:' + epsgMatch[1];
-                } else if (srcCrs.startsWith('EPSG:')) {
-                    srcProj = srcCrs;
-                } else {
-                    srcProj = srcCrs; // fallback
-                }
-
-                if (srcProj === 'EPSG:4326') return geojson; // Ya está en WGS84
-
-                let dstProj = 'EPSG:4326';
-
-                function reproyectarCoords(coords) {
-                    if (typeof coords[0] === 'number') {
-                        // GeoJSON: [lng, lat], Proj4 espera [x, y]
-                        var result = proj4(srcProj, dstProj, [coords[0], coords[1]]);
-                        // Asegura que el resultado sea [lng, lat]
-                        return [result[0], result[1]];
-                    } else {
-                        return coords.map(reproyectarCoords);
-                    }
-                }
-
-                function reproyectarFeature(f) {
-                    let g = f.geometry;
-                    if (!g || !g.coordinates) return f; // Si no hay geometría o coordenadas, retorna el feature original
-                    let reprojGeom = Object.assign({}, g);
-                    reprojGeom.coordinates = reproyectarCoords(g.coordinates);
-                    return Object.assign({}, f, { geometry: reprojGeom });
-                }
-
-                if (geojson.type === 'FeatureCollection') {
-                    return {
-                        type: 'FeatureCollection',
-                        features: geojson.features.map(reproyectarFeature)
-                    };
-                } else if (geojson.type === 'Feature') {
-                    return reproyectarFeature(geojson);
-                } else if (geojson.type === 'GeometryCollection') {
-                    return {
-                        type: 'GeometryCollection',
-                        geometries: geojson.geometries.map(g => {
-                            let reprojGeom = Object.assign({}, g);
-                            reprojGeom.coordinates = reproyectarCoords(g.coordinates);
-                            return reprojGeom;
-                        })
-                    };
-                }
-                return geojson;
-            } catch (err) {
-                console.error("Error al reproyectar GeoJSON: " + err.message);
-                return geojson; // Retorna el GeoJSON original si hay error
-            }
+                color = hslToHex(h, s, l);
+            } while (forbidden.includes(color.toLowerCase()));
+            return {
+                color: color,
+                weight: 2,
+                opacity: 1,
+                fillColor: color,
+                fillOpacity: 0.5
+            };
         }
 
         /**
          * Agrega una capa WMS al mapa a partir de una URL proporcionada.
          * @param {string} url - La URL del servicio WMS.
-         *  * @returns {void}
+         * @returns {void}
          */
         function agregarCapaWMS(url) {
             mostrarSpinner();
@@ -624,41 +677,37 @@
          * @param {string} url - La URL del servicio WFS que devuelve GeoJSON.
          * @returns {void}
          */
-        function agregarCapaWFS(url) {
-            //https://sig.asturias.es/servicios/services/ClasesAgroecologicas50000/MapServer/WFSServer?service=WFS&version=2.0.0&request=GetFeature&typeName=usos_agrarios&outputFormat=GEOJSON
+        function agregarCapaWFS(url, nombre) {
             mostrarSpinner();
-            var nombre = "Zonificación";//prompt("Nombre para la capa WFS:", url);            
             // Solo soporta WFS que devuelven GeoJSON directamente
             fetch(url)
             .then(r => r.json())
             .then(geojson => {
                 var capa = L.geoJSON(geojson, {
-                    onEachFeature: onEachFeature,
-                    style: {
-                    color: "#4B006E",        // línea externa morado oscuro
-                    weight: 2,
-                    opacity: 1,              // sin transparencia en línea
-                    fillColor: "#A259E6",    // relleno morado
-                    fillOpacity: 0.5         // 50% transparencia en relleno
-                }
+                    onEachFeature: "", //onEachFeature,
+                    /*style: {
+                        color: "#4B006E",        // línea externa morado oscuro
+                        weight: 2,
+                        opacity: 1,              // sin transparencia en línea
+                        fillColor: "#A259E6",    // relleno morado
+                        fillOpacity: 0.5         // 50% transparencia en relleno
+                    }*/
+                    style: getRandomStyle() // Estilo con color aleatorio
                 });
-                    overlays[nombre] = capa;
-                    capa.addTo(map);
-                    updateLayerControl();
-                    zoomAcapa(capa);
+                overlays[nombre] = capa;
+                capa.addTo(map);
+                updateLayerControl();
+                zoomAcapa(capa);
             })
             .catch(() => {
-                console.alert("No se pudo cargar el WFS (¿devuelve GeoJSON?)");
-                //agregarCapaWFSfromJSON(url);
+                alert("No se pudo cargar el WFS (¿devuelve GeoJSON?)");
             })
             .finally(() => ocultarSpinner());
-        };
-
-        
+        };        
 
         /* Función para actualizar el control de capas
-            * Elimina todas las capas del control y las vuelve a agregar según el estado actual de overlays.
-            * @returns {void}
+        * Elimina todas las capas del control y las vuelve a agregar según el estado actual de overlays.
+        * @returns {void}
         */
         function updateLayerControl() {
             // Remove all overlays from the control
@@ -695,6 +744,11 @@
             }
         };
        
+        /* Intersecta dos capas GeoJSON y crea una nueva capa con los resultados.
+         * @param {L.GeoJSON} capaEntrada - La primera capa GeoJSON.
+         * @param {L.GeoJSON} capaIdent - La segunda capa GeoJSON.
+         * @param {string} opcion - La opción de intersección ("solo_intersectan" o "todos").
+         */
         function intersect(capaEntrada, capaIdent, opcion) {
             mostrarSpinner();
             // Verifica que ambas capas sean GeoJSON
@@ -743,11 +797,64 @@
                     return;
             }
             nombreCapa = "Intersección";
-            resultLayer = L.geoJSON({type: "FeatureCollection", features: intersectFeatures}, {onEachFeature: onEachFeature, style: {color: "red"}});
+            // Capa con relleno rayado usando patrón SVG
+            // Creamos un patrón SVG y lo usamos como fillPattern
+            // Primero, creamos el patrón solo una vez y lo agregamos al DOM si no existe
+            function getHatchPatternId() {
+                const patternId = "hatch-pattern-red";
+                if (!document.getElementById(patternId)) {
+                    const svgNS = "http://www.w3.org/2000/svg";
+                    const svg = document.createElementNS(svgNS, "svg");
+                    svg.setAttribute("width", 0);
+                    svg.setAttribute("height", 0);
+                    svg.style.position = "absolute";
+                    svg.style.pointerEvents = "none";
+                    svg.style.left = "-9999px";
+                    svg.innerHTML = `
+                        <defs>
+                            <pattern id="${patternId}" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                                <rect x="0" y="0" width="8" height="8" fill="white" fill-opacity="0"/>
+                                <line x1="0" y1="0" x2="0" y2="8" stroke="red" stroke-width="2"/>
+                            </pattern>
+                        </defs>
+                    `;
+                    document.body.appendChild(svg);
+                }
+                return patternId;
+            }
+            getHatchPatternId();
+
+            resultLayer = L.geoJSON({type: "FeatureCollection", features: intersectFeatures}, {
+                onEachFeature: "", //onEachFeature,
+                style: function() {
+                    // Usamos fillPattern con SVG si el navegador lo soporta
+                    return {
+                        color: "red",
+                        weight: 2,
+                        fillColor: "url(#hatch-pattern-red)",
+                        fillOpacity: 1
+                    };
+                }
+            });
+
+            // Parche para Leaflet: aplicar patrón SVG como relleno
+            resultLayer.eachLayer(function(layer) {
+                if (layer instanceof L.Path) {
+                    layer.once('add', function() {
+                        try {
+                            const path = layer._path;
+                            if (path) {
+                                path.setAttribute('fill', 'url(#hatch-pattern-red)');
+                                path.setAttribute('fill-opacity', 1);
+                            }
+                        } catch (e) {}
+                    });
+                }
+            });
             } else {
             nombreCapa = "Marcado intersección";
             resultLayer = L.geoJSON({type: "FeatureCollection", features: allFeatures}, {
-                onEachFeature: onEachFeature,
+                onEachFeature: "", //onEachFeature,
                 style: function(f) {
                 return {color: f.properties._intersecta === "Sí" ? "red" : "blue"};
                 }
@@ -762,10 +869,10 @@
         };
 
         /* Función para hacer zoom a una capa
-            * Hace zoom a la capa proporcionada, expandiendo sus límites en un 20% en cada dirección.
-            * Si la capa es un punto, centra el mapa en ese punto con un zoom de 15.
-            * @param {L.Layer} capa - La capa a la que se le hará zoom.
-            * @returns {void}
+        * Hace zoom a la capa proporcionada, expandiendo sus límites en un 20% en cada dirección.
+        * Si la capa es un punto, centra el mapa en ese punto con un zoom de 15.
+        * @param {L.Layer} capa - La capa a la que se le hará zoom.
+        * @returns {void}
         */
         function zoomAcapa(capa) {
             if (capa.getBounds && capa.getBounds().isValid()) {
@@ -828,8 +935,8 @@
     function ocultarSpinner() {
         let spinner = document.getElementById('spinner-cargando');
         if (spinner) spinner.style.display = 'none';
-    }
-        
+    };
+    // #endregion
     </script>
 </body>
 </html>
