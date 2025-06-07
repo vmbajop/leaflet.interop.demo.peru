@@ -46,11 +46,30 @@
             updateLayerControl();
         });
         // #endregion
-        
-        mostrarSpinner();
 
         var basemaps = addBasemaps();
-        basemaps["OpenStreetMap"].addTo(map);        
+        basemaps["OpenStreetMap"].addTo(map); // Añadir OSM por defecto
+
+        // Cambia a "Mixta" al hacer zoom a determinada escala (por ejemplo, zoom >= 14)
+        /*map.on('zoomend', function() {
+            var currentZoom = map.getZoom();
+            if (currentZoom >= 14) {
+            if (!map.hasLayer(basemaps["Mixta"])) {
+                // Quita otras bases
+                Object.values(basemaps).forEach(function(layer) {
+                if (map.hasLayer(layer)) map.removeLayer(layer);
+                });
+                basemaps["Mixta"].addTo(map);
+            }
+            } else {
+            if (!map.hasLayer(basemaps["OpenStreetMap"])) {
+                Object.values(basemaps).forEach(function(layer) {
+                if (map.hasLayer(layer)) map.removeLayer(layer);
+                });
+                basemaps["OpenStreetMap"].addTo(map);
+            }
+            }
+        });*/
 
         /* LayerControl */
         var overlays = {};
@@ -63,8 +82,6 @@
         document.getElementById('coord-format').addEventListener('change', function() {
             map.fire('mousemove', {latlng: map.getCenter()});
         });
-
-        ocultarSpinner();
 
         // #region BOTONES
 
@@ -196,38 +213,38 @@
                 });
 
                 dialog.querySelector('#confirmar-capa').onclick = function() {
-                let tipo = dialog.querySelector('#tipo-capa').value;
-                if (tipo === 'GeoJSON') {
-                    agregarCapaGeoJSON(dialog.querySelector('#geojson-file'));
-                } else if (tipo === 'WMS') {
-                    let url = dialog.querySelector('#capa-url-wms').value.trim();
-                    if (url) agregarCapaWMS(url);
-                } else if (tipo === 'WFS') {
-                    let select = dialog.querySelector('#wfs-servicio');
-                    let idx = select.value;
-                    let url = dialog.querySelector('#capa-url').value.trim();
-                    let nombre = '';
-                    if (idx === '') {
-                    alert('Seleccione un servicio WFS o introduzca uno manualmente.');
-                    return;
-                    }
-                    if (idx === 'manual') {
-                    if (!url) {
-                        alert('Introduzca la URL del servicio WFS.');
+                    let tipo = dialog.querySelector('#tipo-capa').value;
+                    if (tipo === 'GeoJSON') {
+                        agregarCapaGeoJSON(dialog.querySelector('#geojson-file'));
+                    } else if (tipo === 'WMS') {
+                        let url = dialog.querySelector('#capa-url-wms').value.trim();
+                        if (url) agregarCapaWMS(url);
+                    } else if (tipo === 'WFS') {
+                        let select = dialog.querySelector('#wfs-servicio');
+                        let idx = select.value;
+                        let url = dialog.querySelector('#capa-url').value.trim();
+                        let nombre = '';
+                        if (idx === '') {
+                        alert('Seleccione un servicio WFS o introduzca uno manualmente.');
                         return;
+                        }
+                        if (idx === 'manual') {
+                        if (!url) {
+                            alert('Introduzca la URL del servicio WFS.');
+                            return;
+                        }
+                        nombre = prompt('Nombre para la capa WFS:', url) || url;
+                        } else {
+                        let serv = wfsServicios[parseInt(idx)];
+                        nombre = serv ? serv.nombre : url;
+                        }
+                        if (url && nombre) agregarCapaWFS(url, nombre);
                     }
-                    nombre = prompt('Nombre para la capa WFS:', url) || url;
-                    } else {
-                    let serv = wfsServicios[parseInt(idx)];
-                    nombre = serv ? serv.nombre : url;
-                    }
-                    if (url && nombre) agregarCapaWFS(url, nombre);
-                }
-                document.body.removeChild(modalBg);
+                    document.body.removeChild(modalBg);
                 };
 
                 dialog.querySelector('#cancelar-capa').onclick = function() {
-                document.body.removeChild(modalBg);
+                    document.body.removeChild(modalBg);
                 };
 
                 modalBg.appendChild(dialog);
@@ -395,7 +412,7 @@
                 layer.eachLayer(function(l) {
                 if (l.getBounds && l.getBounds().contains(e.latlng)) {
                     results.push(l.feature);
-                } else if (l.getLatLng && l.getLatLng().distanceTo(e.latlng) < 10) {
+                } else if (l.getLatLng && l.getLatLng().distanceTo(e.latlng) < 1) {
                     results.push(l.feature);
                 }
                 });
@@ -419,18 +436,18 @@
 
             // Encuentra el campo identificador y el ancho máximo de los valores
             results.forEach(function(f) {
-            var props = f.properties || {};
-            Object.keys(props).forEach(function(k) {
-                if (k.length > maxFieldLen) {
-                maxFieldLen = k.length;
-                maxKey = k;
-                }
-                var val = props[k] != null ? String(props[k]) : '';
-                if (val.length > maxValueLen) {
-                maxValueLen = val.length;
-                maxValue = val;
-                }
-            });
+                var props = f.properties || {};
+                Object.keys(props).forEach(function(k) {
+                    if (k.length > maxFieldLen) {
+                    maxFieldLen = k.length;
+                    maxKey = k;
+                    }
+                    var val = props[k] != null ? String(props[k]) : '';
+                    if (val.length > maxValueLen) {
+                        maxValueLen = val.length;
+                        maxValue = val;
+                    }
+                });
             });
 
             // Determina el campo identificador preferido
@@ -647,7 +664,7 @@
                 weight: 2,
                 opacity: 1,
                 fillColor: color,
-                fillOpacity: 0.5
+                fillOpacity: 0.4
             };
         }
 
@@ -658,16 +675,25 @@
          */
         function agregarCapaWMS(url) {
             mostrarSpinner();
-            var nombre = prompt("Nombre para la capa WMS:", url);
-            if (!nombre) return;
-            var capa = L.tileLayer.wms(url, {
-                layers: '', // El usuario debe editar esto después
+            // Extrae la URL base del WMS (sin parámetros)
+            let urlBase = url.split('?')[0];
+            var nombre = prompt("Nombre para la capa WMS:", urlBase);
+            if (!nombre) {
+                ocultarSpinner();
+                return;
+            }
+            // Intenta extraer el parámetro 'layers' de la URL si existe
+            let layersMatch = url.match(/[?&]layers=([^&]+)/i);
+            let layers = layersMatch ? decodeURIComponent(layersMatch[1]) : '';
+            var capa = L.tileLayer.wms(urlBase, {
+                layers: layers, // Si no hay layers, el usuario debe editar esto después
                 format: 'image/png',
                 transparent: true,
-                attribution: url
+                attribution: urlBase
             });
             overlays[nombre] = capa;
             capa.addTo(map);
+            zoomAcapa(capa);
             updateLayerControl();
             ocultarSpinner();
         };
@@ -718,31 +744,7 @@
             for (var key in overlays) {
                 layerControl.addOverlay(overlays[key], key);
             }
-        };
-
-        /* Función para hacer zoom a una capa
-            * Hace zoom a la capa proporcionada, expandiendo sus límites en un 20% en cada dirección.
-            * Si la capa es un punto, centra el mapa en ese punto con un zoom de 15.
-            * @param {L.Layer} capa - La capa a la que se le hará zoom.
-            * @returns {void}
-        */
-        function zoomAcapa(capa) {
-            if (capa.getBounds && capa.getBounds().isValid()) {
-                var bounds = capa.getBounds();
-                // Expand bounds by 20% in each direction
-                var paddingFactor = 0.2;
-                var sw = bounds.getSouthWest();
-                var ne = bounds.getNorthEast();
-                var latDiff = ne.lat - sw.lat;
-                var lngDiff = ne.lng - sw.lng;
-                var newSw = L.latLng(sw.lat - latDiff * paddingFactor, sw.lng - lngDiff * paddingFactor);
-                var newNe = L.latLng(ne.lat + latDiff * paddingFactor, ne.lng + lngDiff * paddingFactor);
-                var paddedBounds = L.latLngBounds(newSw, newNe);
-                map.fitBounds(paddedBounds);
-            } else if (capa.getLatLng) {
-                map.setView(capa.getLatLng(), 15);
-            }
-        };
+        };        
        
         /* Intersecta dos capas GeoJSON y crea una nueva capa con los resultados.
          * @param {L.GeoJSON} capaEntrada - La primera capa GeoJSON.
@@ -790,13 +792,11 @@
             });
 
             let resultLayer;
-            let nombreCapa;
             if (opcion === "solo_intersectan") {
                 if (intersectFeatures.length === 0) {
                     alert("No se encontraron intersecciones.");
                     return;
             }
-            nombreCapa = "Intersección";
             // Capa con relleno rayado usando patrón SVG
             // Creamos un patrón SVG y lo usamos como fillPattern
             // Primero, creamos el patrón solo una vez y lo agregamos al DOM si no existe
@@ -852,14 +852,15 @@
                 }
             });
             } else {
-            nombreCapa = "Marcado intersección";
-            resultLayer = L.geoJSON({type: "FeatureCollection", features: allFeatures}, {
-                onEachFeature: "", //onEachFeature,
-                style: function(f) {
-                return {color: f.properties._intersecta === "Sí" ? "red" : "blue"};
-                }
-            });
+                resultLayer = L.geoJSON({type: "FeatureCollection", features: allFeatures}, {
+                    onEachFeature: "", //onEachFeature,
+                    style: function(f) {
+                    return {color: f.properties._intersecta === "Sí" ? "red" : "blue"};
+                    }
+                });
             }
+
+            let nombreCapa = "intersect_" + opcion + "_" + Date.now()
 
             overlays[nombreCapa] = resultLayer;
             resultLayer.addTo(map);
@@ -889,6 +890,8 @@
                 map.fitBounds(paddedBounds);
             } else if (capa.getLatLng) {
                 map.setView(capa.getLatLng(), 15);
+            }else {
+                alert("La capa no tiene límites válidos para hacer zoom.");
             }
         };
 
