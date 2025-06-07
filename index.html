@@ -131,9 +131,9 @@
                 dialog.innerHTML = `
                 <label>Tipo de capa:
                     <select id="tipo-capa">
-                    <option value="GeoJSON">GeoJSON</option>
-                    <option value="WMS">WMS</option>
-                    <option value="WFS">WFS</option>
+                        <option value="GeoJSON">GeoJSON</option>
+                        <option value="WMS">WMS</option>
+                        <option value="WFS">WFS</option>
                     </select>
                 </label>
                 <div id="geojson-file-div" style="margin:8px 0;">
@@ -141,9 +141,9 @@
                 </div>
                 <div id="wfs-div" style="margin:8px 0; display:none;">
                     <label>Servicio WFS:
-                    <select id="wfs-servicio" style="width:100%;">
-                        <option value="">Introduzca un servicio WFS</option>
-                    </select>
+                        <select id="wfs-servicio" style="width:100%;">
+                            <option value="">Introduzca un servicio WFS</option>
+                        </select>
                     </label>
                     <input type="text" id="capa-url" placeholder="URL del servicio" style="width:100%;margin-top:6px;" />
                 </div>
@@ -194,22 +194,22 @@
 
                 // WFS combo y url sync
                 dialog.addEventListener('change', function(e) {
-                if (e.target && e.target.id === 'wfs-servicio') {
-                    let idx = e.target.value;
-                    let urlInput = dialog.querySelector('#capa-url');
-                    if (idx === '') {
-                    urlInput.value = '';
-                    urlInput.readOnly = true;
-                    } else if (idx === 'manual') {
-                    urlInput.value = '';
-                    urlInput.readOnly = false;
-                    urlInput.placeholder = "Introduzca la URL del servicio WFS";
-                    } else {
-                    let serv = wfsServicios[parseInt(idx)];
-                    urlInput.value = serv ? serv.url : '';
-                    urlInput.readOnly = true;
+                    if (e.target && e.target.id === 'wfs-servicio') {
+                        let idx = e.target.value;
+                        let urlInput = dialog.querySelector('#capa-url');
+                        if (idx === '') {
+                            urlInput.value = '';
+                            urlInput.readOnly = true;
+                        } else if (idx === 'manual') {
+                            urlInput.value = '';
+                            urlInput.readOnly = false;
+                            urlInput.placeholder = "Introduzca la URL del servicio WFS";
+                        } else {
+                            let serv = wfsServicios[parseInt(idx)];
+                            urlInput.value = serv ? serv.url : '';
+                            urlInput.readOnly = true;
+                        }
                     }
-                }
                 });
 
                 dialog.querySelector('#confirmar-capa').onclick = function() {
@@ -225,8 +225,8 @@
                         let url = dialog.querySelector('#capa-url').value.trim();
                         let nombre = '';
                         if (idx === '') {
-                        alert('Seleccione un servicio WFS o introduzca uno manualmente.');
-                        return;
+                            alert('Seleccione un servicio WFS o introduzca uno manualmente.');
+                            return;
                         }
                         if (idx === 'manual') {
                         if (!url) {
